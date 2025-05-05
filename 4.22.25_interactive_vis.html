@@ -12,10 +12,28 @@
 </head>
 
 <body>
+    <div id = "state-select"></div>
+        <label class = "subtitles" for="state-select-drop">State:
+        <select name="state-select-drop" id="state-select-drop" disabled></select></label>
+    </div>
+    <div id = "year-select">
+        <label class = "subtitles" for="year-select-drop">Year:
+        <select name="year-select-drop" id="year-select-drop" disabled></select></label>
+    </div>
+    <div id = "GWh-or-GW">
+        <label for="GWH-or-GW-drop" class = "subtitles" >Units:
+        <select name = "GWh-or-GW-drop" id = "GWh-or-GW-drop" disabled>
+            <option value = "GWh" selected>GWh</option>
+            <option value = "GW">GW</option>
+        </select></label>
+    </div>
+    <br/>
     <div class="bg-grid">
         <div class="bg-cell"></div>
         <div class="bg-cell"></div>
         <div class="bg-cell"></div>
         <div class="bg-cell"></div>
     </div>
+    
+    <script src="4.22.25_interactive_vis.js"></script>
 </body>
