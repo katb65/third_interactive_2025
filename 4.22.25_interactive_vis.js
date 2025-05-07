@@ -61,8 +61,7 @@ class SubSubset { // TODO; primary with maps of green and not green primary piec
     // and another ID & value per primary piece that stores CO2 for that primary piece + how to access it
     // (technically we could split electric data too, for both energy & CO2, but the focus here is more on the primary parts)
 
-    constructor(sector, key, idEnergy) {
-        this.sector = sector;
+    constructor(key, idEnergy) {
         this.key = key;
         this.idEnergy = idEnergy;
         this.val = null;
@@ -103,8 +102,7 @@ class SectorSubset {
         this.subSubsets = new Map();
         this.subSubsets.set("electric", new SubSubset(key, "electric", idElectric)); // id for electric stored higher up due to need to divide
         this.subSubsets.set("primary", new SubSubset(key, "primary", null));
-
-        this.subSubsets.set("total", new SubSubset(key, "total", idTotal)); // used only to error check pulls (sums)
+        this.subSubsets.set("total", new SubSubset(key, "total", idTotal)); 
     
         this.subSubsets.get("primary").setupPrimaryPieces(idWind, idSolar, idGeo, idHydro,
                                                             idCoal, idNatGas, idSuppGas, idPetroleum);
@@ -118,6 +116,69 @@ class SectorSubset {
 // allows button for quick reset to base. allows recombination of pieces into diff amounts of bars (ex. once aviation exclusion etc exists) 
 // and subcontents of bars for display without compromising base data but with having stable objects to map in d3 so that the data joining is not reprocessed on 
 // every slider slide. allows a place to store % electrification and amount of demand that isn't intertwined w base data.
+// okay... why would we have separate objects for each section. let's just rework the object, no??
+/*
+map(key->sector subset)
+
+sector subset [
+    key
+
+    (though we can calculate these from base, it's nice to have them handy for easy reset):
+    baseDemand
+    baseElectrification
+
+    sub subsets (electric, primary, total: will exist for both base and adjusted sector data)
+
+    adjustedDemand
+    adjustedElectrification
+]
+
+sub subset [ 
+    key
+    id
+
+    baseVal
+    
+    primary pieces (for primary)
+
+    adjustedVal
+]
+
+primary piece [
+    key
+    idToVal (id->{val, add/subtract})
+
+    baseVal
+
+    adjustedVal (this will start out being adjusted through parent percentages only (this base val / parent base val being the init ratio), 
+    but become individually adjustable as a checkbox option? ex. coal in industry.)
+]
+
+
+okay now how to split these primaries into green, ngreen, and unelectrifiable, w consistent object modeling to quickly rerun d3 mappings?
+when user elects to use unelectrifiables, we just rewire the primary pieces to add several new ones for aviation/marine, and subtract out their vals from
+the id subtract pieces of the overarching petroleum or whatever it is. vice versa if they unselect that checkbox.
+we always store the primary pieces in their bulk big map. separately in display vars, we have our bar graph mappings, to primary piece keys:
+green->solar, wind, ... ngreen->coal, gas,... nuclear? depends! what did they choose?, ... unelectrifiable->depends if this even exists! aviation, cargoships,...
+the demand/electrification% will not need to jump around when a piece switches bar categories, since ofc it totals to the same; so that part is fine.
+however! the green primaries need not be electrified. so if they say nuclear is ngreen, slide electrification to 100%, then say actually nuclear is green,
+they will now need LESS electricity; and i guess demand will also change? no it won't bc the way the slider will be set up will be to dual the if 100% electrified/
+if 100% nonelectrified vals on top/bottom. no but those vals will need to change bc the amount of the thing (nongreen primaries) that is being electrified, changes.
+TODO:
+okay so the thing that happens when they switch something like this is: the system adjusts electrification% and checks if it has overflowed: if it has,
+the system adjusts it back to 100%, and removes that need-for-electricity from the bottom electrification spot (simple way: just have a blurb that says "you have
+x gwh more electricity than required!/you need x gwh more electricity to fulfill demand!")
+TODO: 
+try and make sure that when we bind the data, we bind it somehow in a key-matching-way, so the system does not redraw data it already has ..? or will it be
+out of order, then, if things get slid around...
+
+
+
+
+
+
+
+/*
 
 // -----------------------------------------------------
 // ---Inner Variables: ---
