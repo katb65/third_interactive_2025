@@ -17,24 +17,28 @@ let directoryRoot = ""; // if this is blank, doesn't seem to trigger CORS due to
 // These add together to the primary total for their sector, used to give more detail into its energy use
 class PrimaryPiece { 
     key; // ex. "wind"
-    idToVal; // map to contain ID to val to add or subtract for state mappings for this piece, GWh
+    idToVal; // map to contain ID to baseVal to add or subtract for state mappings for this piece, GWh
     // needs to be a map due to some pieces having multiple different things that need to be added or subtracted
-    val; // totaled val state of this piece, GWh
+    
+    baseVal; // totaled val state of this piece, GWh
+
+    adjustedVal; // GWh
   
-    // add means add together, sub means subtract from these, all to get final total for primary
+    // add means add together, sub means subtract from these, all to get final base total for primary
     // b/c some vals come with caveats (ex. natural gas needs supplemental fuels subtracted)
     constructor(key, idsEnergyAdd, idsEnergySub) {
       this.idToVal = new Map();
   
       this.key = key;
       for(let id of idsEnergyAdd) {
-        this.idToVal.set(id, {val: null, add: true});
+        this.idToVal.set(id, {baseVal: null, add: true});
       }
       for(let id of idsEnergySub) {
-        this.idToVal.set(id, {val: null, add: false});
+        this.idToVal.set(id, {baseVal: null, add: false});
       }
   
-      this.val = null;
+      this.baseVal = null;
+      this.adjustedVal = null;
     }
 }
 
@@ -55,7 +59,10 @@ class SubSubset { // TODO; primary with maps of green and not green primary piec
 
     key; // ex. "elecSector"
     idEnergy; // ex. "ESCCB" for a commercial sector subset, electric sub subset
-    val; // GWh
+
+    baseVal; // GWh
+
+    adjustedVal; // GWh
 
     primaryPieces; // only non-null in primary SubSubsets, contains breakdown of primary energy by map of id to energy from that id, values in GWh
     // and another ID & value per primary piece that stores CO2 for that primary piece + how to access it
@@ -64,7 +71,8 @@ class SubSubset { // TODO; primary with maps of green and not green primary piec
     constructor(key, idEnergy) {
         this.key = key;
         this.idEnergy = idEnergy;
-        this.val = null;
+        this.baseVal = null;
+        this.adjustedVal = null;
         this.primaryPieces = null;
     }
 
@@ -90,6 +98,14 @@ class SubSubset { // TODO; primary with maps of green and not green primary piec
 class SectorSubset {
     key; // the sector type (ex. "commercial")
 
+    // Initial values, pulled direct from EIA, for current state/year's demand (sum of subvals)/electrification %
+    baseDemand; // GWh
+    baseElectrification; // %
+
+    // The values the user has moved to on the sliders for this sector
+    adjustedDemand; // % of baseDemand (since GWh will vary by electrification due to efficiency factors)
+    adjustedElectrification; // % of adjustedDemand electrified
+
     // Maps of sub subset names, to IDs used to index into EIA and curr state vals for curr year for that ID
     subSubsets; 
 
@@ -98,6 +114,10 @@ class SectorSubset {
         idCoal, idNatGas, idSuppGas, idPetroleum) {
 
         this.key = key;
+        this.baseDemand = null;
+        this.baseElectrification = null;
+        this.adjustedDemand = null;
+        this.adjustedElectrification = null;
 
         this.subSubsets = new Map();
         this.subSubsets.set("electric", new SubSubset(key, "electric", idElectric)); // id for electric stored higher up due to need to divide
@@ -111,19 +131,13 @@ class SectorSubset {
     // TODO will CO2 be integrated here or be its own object?
 }
 
-// TODO CONCEPT:
-// base sector data and adjusted sector data in separate objects (both here not in display vars since it's moreso stored data than display variance even if user-input)
-// allows button for quick reset to base. allows recombination of pieces into diff amounts of bars (ex. once aviation exclusion etc exists) 
-// and subcontents of bars for display without compromising base data but with having stable objects to map in d3 so that the data joining is not reprocessed on 
-// every slider slide. allows a place to store % electrification and amount of demand that isn't intertwined w base data.
-// okay... why would we have separate objects for each section. let's just rework the object, no??
 /*
 map(key->sector subset)
 
 sector subset [
     key
 
-    (though we can calculate these from base, it's nice to have them handy for easy reset):
+    (though we can calculate these from base, it's nice to have them handy for easy reset/object layout consistency):
     baseDemand
     baseElectrification
 
@@ -173,12 +187,7 @@ try and make sure that when we bind the data, we bind it somehow in a key-matchi
 out of order, then, if things get slid around...
 
 
-
-
-
-
-
-/*
+*/
 
 // -----------------------------------------------------
 // ---Inner Variables: ---
@@ -219,6 +228,11 @@ d3.select("#year-select-drop")
 
 d3.select("#GWh-or-GW-drop")
   .on("change", updateGWhorGW);
+
+// TODO can I condense these into one demand sliders function, or even one demand/elec sliders function for sectors, by id'ing their separate classes, not id?
+// with some sort of this-pass to select the right class..?
+d3.select("#slider-demand-industry")
+  .on("change", updateSliderDemandIndustry);
 
 // -----------------------------------------------------
 // ---On-Change Functions: ---
@@ -268,6 +282,16 @@ function updateGWhorGW() {
 
   visualizeStateData();
   */
+}
+
+function updateSliderDemandIndustry() {
+    // TODO lock, revis, unlock
+
+    let currDemand = d3.select("#slider-demand-industry").property("value");
+
+    // TODO store within map within sector
+
+    d3.select("#output-demand-industry").text(currDemand + "%");
 }
 
 // -----------------------------------------------------
