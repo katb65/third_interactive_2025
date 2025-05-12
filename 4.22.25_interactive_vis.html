@@ -28,21 +28,27 @@
         </select></label>
     </div>
     <br/>
-    <div class="bg-grid">
-        <div class="bg-cell">
-            <p> test text </p>
-            <div class="slide-container">
-                <!-- TODO move display inline to CSS -->
-                <!-- TODO add text input box for precision? also align the nums -->
-                <p style = "display: inline"> 0% </p>
-                <input style = "display: inline" type="range" min = "0" max = "500" value = "100" step = "1" class = "slider" id = "slider-demand-industry"></input>
-                <p style = "display: inline"> 500% </p>
-                <p id = "output-demand-industry"> 100% </p>
+    <div class="grid">
+        <div class="cell industrial">
+            <p id = "test-text"> test text </p>
+            <div class="slide-container demand">
+                <!-- TODO add text input box for precision? -->
+                <!-- TODO try converting to a D3 slider, this one locks up sometimes -->
+                <p> 0% </p>
+                <input type="range" min = "0" max = "500" value = "100" step = "1" class = "slider"></input>
+                <p> 500% &nbsp;&nbsp;&nbsp; </p>
+                <p class = "slider-output"> 100% </p>
+            </div>
+            <div class="slide-container electrification">
+                <p> 0% </p>
+                <input type="range" min = "0" max = "100" value = "0" step = "1" class = "slider"></input>
+                <p> 100% &nbsp;&nbsp;&nbsp; </p>
+                <p class = "slider-output"> </p>
             </div>
         </div>
-        <div class="bg-cell"></div>
-        <div class="bg-cell"></div>
-        <div class="bg-cell"></div>
+        <div class="cell"></div>
+        <div class="cell"></div>
+        <div class="cell"></div>
     </div>
 
     <script src="4.22.25_interactive_vis.js"></script>
