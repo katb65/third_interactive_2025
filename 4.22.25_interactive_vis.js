@@ -253,13 +253,8 @@ d3.select("#year-select-drop")
 d3.select("#GWh-or-GW-drop")
   .on("change", updateGWhorGW);
 
-// TODO can I condense these into one demand sliders function, or even one demand/elec sliders function for sectors, by id'ing their separate classes, not id?
-// with some sort of this-pass to select the right class..? use event object that gets passed to the on function
-d3.select(".industrial").select(".demand").select(".slider")
-  .on("change", updateSliderDemandIndustry);
-
-d3.select(".industrial").select(".electrification").select(".slider")
-  .on("change", updateSliderElecIndustry);
+d3.selectAll(".cell > * > .slider")
+    .on("change", (event) => updateSectorSlider(event));
 
 // -----------------------------------------------------
 // ---On-Change Functions: ---
@@ -331,14 +326,38 @@ function updateSliderElecIndustry() {
     d3.select(".industrial").select(".electrification").select(".slider-output").text(currElec + "%");
 }
 
+function updateSectorSlider(event) {
+    // Get updated value
+    let currValue = d3.select(event.target).property("value");
+
+    // Narrow down where event occurred
+    let currSliderBox = d3.select(event.target.parentNode);
+    let currSectorBox = d3.select(event.target.parentNode.parentNode);
+
+    let currSector = currSectorBox.attr("class").split(" ")
+        .find((element) => /sector-/.test(element)).slice(7); // locate the class pertaining to the sector name & isolate it
+    let currType = currSliderBox.attr("class").split(" ")
+        .find((element) => /type-/.test(element)).slice(5); // same for demand vs electrification
+
+    console.log(currSector);
+    console.log(currType);
+
+    // Store event consequences
+    // TODO
+
+    // Print event update
+    // TODO more
+    currSliderBox.select(".slider-output").text(currValue + "%")
+}
+
 // -----------------------------------------------------
 // ---Main Functions: ---
 // -----------------------------------------------------
 
-// Sets up year dropdown + state-specific and US-wide variables & text through initial data pull & unlocks the user input
+// Sets up year dropdown + variables & text through initial data pull & unlocks the user input
 // NOTE: assumes user input is locked in the process
 async function initialize() {
-    // Pull everything for US to initialize
+    // Pull everything to initialize
     initializeStateNameToID();
     initializeStateSelect();
 
@@ -346,15 +365,20 @@ async function initialize() {
 
     await pullStoreData();
 
-    //TODO remove
-    let currTest = sectorsCons.subsetsMap.get("industrial");
-    d3.select("#test-text").text("industrial demand " + currTest.subSubsets.get("total")["baseVal"] + " electric " + currTest.subSubsets.get("electric")["baseVal"] 
-        + " which is % " + currTest.adjustedElectrification);
+    // TODO move this to some other print/vis data func
+    d3.selectAll(".cell")
+        .each(function(d,i) {
+            console.log("test");
 
-    // TODO generalize
-    d3.select(".industrial").select(".electrification").select(".slider").property("value", currTest.adjustedElectrification);
-    d3.select(".industrial").select(".electrification").select(".slider-output").text(currTest.adjustedElectrification + "%");
+            let currSectorBox = d3.select(this);
+            let currSector = currSectorBox.attr("class").split(" ")
+                .find((element) => /sector-/.test(element)).slice(7);
 
+            let currAdjustedElectrification = sectorsCons.subsetsMap.get(currSector).adjustedElectrification;
+
+            currSectorBox.select(".type-electrification > .slider").property("value", currAdjustedElectrification);
+            currSectorBox.select(".type-electrification > .slider-output").text(currAdjustedElectrification + "%");
+        });
     /*
 
     await pullStoreUSData();
@@ -366,8 +390,9 @@ async function initialize() {
 
     visualizeStateData();
 
-    enableUserInput();
     */
+
+    enableUserInput();
 }
 
 // Generate user input dropdown for state selection based on our state name -> state ID mapping
@@ -456,22 +481,26 @@ function initializeStateNameToID() {
 // Disables all user input elements
 function disableUserInput() {
     d3.select("#state-select-drop")
-    .property("disabled", true);
+        .property("disabled", true);
     d3.select("#year-select-drop")
-    .property("disabled", true);
+        .property("disabled", true);
     d3.select("#GWh-or-GW-drop")
-    .property("disabled", true);
+        .property("disabled", true);
+    d3.selectAll(".cell > * > .slider")
+        .property("disabled", true);
 }
 
 // For initialize(), updateState(), updateYear(), TODO
 // Enables all user input elements
 function enableUserInput() {
     d3.select("#state-select-drop")
-    .attr("disabled", null);
+        .attr("disabled", null);
     d3.select("#year-select-drop")
-    .attr("disabled", null);
+        .attr("disabled", null);
     d3.select("#GWh-or-GW-drop")
-    .attr("disabled", null);
+        .attr("disabled", null);
+    d3.selectAll(".cell > * > .slider")
+        .attr("disabled", null);
 }
 
 // For initializeYears(), pullStoreData()

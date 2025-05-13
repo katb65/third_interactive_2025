@@ -29,26 +29,72 @@
     </div>
     <br/>
     <div class="grid">
-        <div class="cell industrial">
-            <p id = "test-text"> test text </p>
-            <div class="slide-container demand">
+        <div class="cell sector-industrial">
+            <p> Industrial </p>
+            <p class = "test-text"></p>
+            <div class="slide-container type-demand">
                 <!-- TODO add text input box for precision? -->
                 <!-- TODO try converting to a D3 slider, this one locks up sometimes -->
                 <p> 0% </p>
-                <input type="range" min = "0" max = "500" value = "100" step = "1" class = "slider"></input>
+                <input type="range" min = "0" max = "500" value = "100" step = "1" class = "slider" disabled></input>
                 <p> 500% &nbsp;&nbsp;&nbsp; </p>
                 <p class = "slider-output"> 100% </p>
             </div>
-            <div class="slide-container electrification">
+            <div class="slide-container type-electrification">
                 <p> 0% </p>
-                <input type="range" min = "0" max = "100" value = "0" step = "1" class = "slider"></input>
+                <input type="range" min = "0" max = "100" value = "0" step = "1" class = "slider" disabled></input>
                 <p> 100% &nbsp;&nbsp;&nbsp; </p>
                 <p class = "slider-output"> </p>
             </div>
         </div>
-        <div class="cell"></div>
-        <div class="cell"></div>
-        <div class="cell"></div>
+        <div class="cell sector-transportation">
+            <p> Transportation </p>
+            <p class = "test-text"></p>
+            <div class="slide-container type-demand">
+                <p> 0% </p>
+                <input type="range" min = "0" max = "500" value = "100" step = "1" class = "slider" disabled></input>
+                <p> 500% &nbsp;&nbsp;&nbsp; </p>
+                <p class = "slider-output"> 100% </p>
+            </div>
+            <div class="slide-container type-electrification">
+                <p> 0% </p>
+                <input type="range" min = "0" max = "100" value = "0" step = "1" class = "slider" disabled></input>
+                <p> 100% &nbsp;&nbsp;&nbsp; </p>
+                <p class = "slider-output"> </p>
+            </div>
+        </div>
+        <div class="cell sector-commercial">
+            <p> Commercial </p>
+            <p class = "test-text"></p>
+            <div class="slide-container type-demand">
+                <p> 0% </p>
+                <input type="range" min = "0" max = "500" value = "100" step = "1" class = "slider" disabled></input>
+                <p> 500% &nbsp;&nbsp;&nbsp; </p>
+                <p class = "slider-output"> 100% </p>
+            </div>
+            <div class="slide-container type-electrification">
+                <p> 0% </p>
+                <input type="range" min = "0" max = "100" value = "0" step = "1" class = "slider" disabled></input>
+                <p> 100% &nbsp;&nbsp;&nbsp; </p>
+                <p class = "slider-output"> </p>
+            </div>
+        </div>
+        <div class="cell sector-residential">
+            <p> Residential </p>
+            <p class = "test-text"></p>
+            <div class="slide-container type-demand">
+                <p> 0% </p>
+                <input type="range" min = "0" max = "500" value = "100" step = "1" class = "slider" disabled></input>
+                <p> 500% &nbsp;&nbsp;&nbsp; </p>
+                <p class = "slider-output"> 100% </p>
+            </div>
+            <div class="slide-container type-electrification">
+                <p> 0% </p>
+                <input type="range" min = "0" max = "100" value = "0" step = "1" class = "slider" disabled></input>
+                <p> 100% &nbsp;&nbsp;&nbsp; </p>
+                <p class = "slider-output"> </p>
+            </div>
+        </div>
     </div>
 
     <script src="4.22.25_interactive_vis.js"></script>
