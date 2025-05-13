@@ -306,26 +306,6 @@ function updateGWhorGW() {
   */
 }
 
-function updateSliderDemandIndustry() {
-    // TODO lock, revis, unlock
-
-    let currDemand = d3.select(".industrial").select(".demand").select(".slider").property("value");
-
-    // TODO store within map within sector
-
-    d3.select(".industrial").select(".demand").select(".slider-output").text(currDemand + "%");
-}
-
-function updateSliderElecIndustry() {
-    // TODO lock, revis, unlock
-
-    let currElec = d3.select(".industrial").select(".electrification").select(".slider").property("value");
-
-    // TODO store within map within sector
-
-    d3.select(".industrial").select(".electrification").select(".slider-output").text(currElec + "%");
-}
-
 function updateSectorSlider(event) {
     // Get updated value
     let currValue = d3.select(event.target).property("value");
