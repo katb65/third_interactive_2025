@@ -98,6 +98,10 @@ class SubSubset { // TODO; primary with maps of green and not green primary piec
 class SectorSubset {
     key; // the sector type (ex. "commercial")
 
+    // TODO: should I move all the IDs, values (base/adjusted) from total into here + adjust pull & stores? will make it cleaner as demand/electrification
+    // is now a value that has to be stored here so it's no longer a valueless container. may not be worth with time tradeoff currently though.
+    // also here stored are %s whereas that is actual vals
+
     // Base demand can be found in the "total" subSubset baseVal; 
     // Base electrification can be calculated by a combination of electric subSubset's baseVal, primary subSubset's baseVal, and the efficiency factor 
     // to level electric to a "user-count" sort of demand scale rather than "GWh-count", since primary often uses more energy to accomplish the same 
@@ -263,42 +267,69 @@ d3.selectAll(".cell > * > .slider")
 // Called on user change of state selection, changes state variable then 
 // locks user input, updates inner data & its text & vis output, unlocks user input
 async function updateState() {
+  state = d3.select("#state-select-drop").property("value");
+
+  disableUserInput();
+
+  await pullStoreData();
+
+  // TODO move into vis func
+  d3.selectAll(".cell")
+  .each(function(d,i) {
+      console.log("test");
+
+      let currSectorBox = d3.select(this);
+      let currSector = currSectorBox.attr("class").split(" ")
+          .find((element) => /sector-/.test(element)).slice(7);
+
+      let currAdjustedElectrification = sectorsCons.subsetsMap.get(currSector).adjustedElectrification;
+
+      currSectorBox.select(".type-electrification > .slider").property("value", currAdjustedElectrification);
+      currSectorBox.select(".type-electrification > .slider-output").text(currAdjustedElectrification + "%");
+  });
+
+  enableUserInput();
+
     /*
-    state = d3.select("#state-select-drop").property("value");
-
-    disableUserInput();
-
-    await pullStoreStateData();
-
     visualizeStateData(); 
-
-    enableUserInput();
     */
 }
 
 // Called on user change of year selection, changes year variable then
 // locks user input, updates inner data & its text & vis output, unlocks user input
 async function updateYear() {
+  year = parseInt(d3.select("#year-select-drop").property("value"));
+
+  disableUserInput();
+
+  await pullStoreData();
+
+  // TODO move into vis func
+  d3.selectAll(".cell")
+  .each(function(d,i) {
+      console.log("test");
+
+      let currSectorBox = d3.select(this);
+      let currSector = currSectorBox.attr("class").split(" ")
+          .find((element) => /sector-/.test(element)).slice(7);
+
+      let currAdjustedElectrification = sectorsCons.subsetsMap.get(currSector).adjustedElectrification;
+
+      currSectorBox.select(".type-electrification > .slider").property("value", currAdjustedElectrification);
+      currSectorBox.select(".type-electrification > .slider-output").text(currAdjustedElectrification + "%");
+  });
+
+  enableUserInput();
+
     /*
-    year = parseInt(d3.select("#year-select-drop").property("value"));
-
-    disableUserInput();
-
-    await pullStoreUSData();
-    if(state === "US") {
-      copyUSToStateData();
-    } else {
-      await pullStoreStateData();
-    }
 
     visualizeStateData();
-
-    enableUserInput();
     */
 }
 
 // Called on user change of GW vs GWh display selection, changes GWhorGW and updates text output
 function updateGWhorGW() {
+  //TODO
     /*
   GWhorGW = d3.select("#GWh-or-GW-drop").property("value");
 
@@ -308,7 +339,7 @@ function updateGWhorGW() {
 
 function updateSectorSlider(event) {
     // Get updated value
-    let currValue = d3.select(event.target).property("value");
+    let currValue = parseFloat(d3.select(event.target).property("value"));
 
     // Narrow down where event occurred
     let currSliderBox = d3.select(event.target.parentNode);
@@ -322,8 +353,48 @@ function updateSectorSlider(event) {
     console.log(currSector);
     console.log(currType);
 
+    // store data + all the primary pieces within this sector must now be proportionally adjusted to this new demand/electrification
+    // TODO switched from adjusted-based to base-based but completely forgot to take into account adjusted elec in the demand if and adjusted demand in the elec if. 
+    // Probably best done instead by doing one big flat thing outside the if for both adjustments, basing it on base values as I already am, taking both adjusteds
+    // into the makeup of it.
+    let currSubset = sectorsCons.subsetsMap.get(currSector);
+    if(currType === "demand") {
+      currSubset["adjustedDemand"] = currValue;
+
+      currSubset.subSubsets.get("primary")["adjustedVal"] = (currValue / 100) * currSubset.subSubsets.get("primary")["baseVal"];
+      currSubset.subSubsets.get("electric")["adjustedVal"] = (currValue / 100) * currSubset.subSubsets.get("electric")["baseVal"];
+      currSubset.subSubsets.get("total")["adjustedVal"] = currSubset.subSubsets.get("primary")["adjustedVal"] + currSubset.subSubsets.get("electric")["adjustedVal"];
+
+      // primary pieces
+      for(let currPrimaryPiece of currSubset.subSubsets.get("primary").primaryPieces.values()) {
+        currPrimaryPiece["adjustedVal"] = (currValue / 100) * currPrimaryPiece["baseVal"];
+      }
+
+    } else if(currType === "electrification") {
+      // so if electrification increases, the primary vals go down, proportional to their percentage of the total primary val, and the electric val goes up,
+      // and total stays the same no it doesn't because of the electric factor stuff it goes down
+      currSubset["adjustedElectrification"] = currValue;
+
+      // currToMove = the amount of primary GWh that needs to be either subtracted or added with respect to baseVal; the electric GWh to be subtracted/added will 
+      // be inverse, and multiplied by the corresponding efficiency factor
+      // this could be simpler based on adjustedVal/prior adjustedElectrification, but it would run away from the base vals with continual adjustments if so
+      // due to rounding
+      let baseElectrification = ((currSubset.subSubsets.get("electric")["baseVal"]/(currSubset.elecEfficiency)) / 
+        ((currSubset.subSubsets.get("primary")["baseVal"]) + (currSubset.subSubsets.get("electric")["baseVal"]/(currSubset.elecEfficiency)))) * 100;
+      let currToMove = (currSubset.subSubsets.get("primary")["baseVal"] / (100 - baseElectrification)) * (baseElectrification - currValue);
+
+      currSubset.subSubsets.get("primary")["adjustedVal"] = currSubset.subSubsets.get("primary")["baseVal"] + currToMove;
+      currSubset.subSubsets.get("electric")["adjustedVal"] = currSubset.subSubsets.get("electric")["baseVal"] - (currToMove * currSubset.elecEfficiency);
+      currSubset.subSubsets.get("total")["adjustedVal"] = currSubset.subSubsets.get("primary")["adjustedVal"] + currSubset.subSubsets.get("electric")["adjustedVal"];
+
+      // primary pieces, by ratio
+      for(let currPrimaryPiece of currSubset.subSubsets.get("primary").primaryPieces.values()) {
+        currPrimaryPiece["adjustedVal"] = currPrimaryPiece["baseVal"] + currToMove * (currPrimaryPiece["baseVal"] / currSubset.subSubsets.get("primary")["baseVal"]);
+      }
+    }
+
     // Store event consequences
-    // TODO
+    // TODO more or is it just the above?
 
     // Print event update
     // TODO more
@@ -345,7 +416,7 @@ async function initialize() {
 
     await pullStoreData();
 
-    // TODO move this to some other print/vis data func
+    // TODO move this to some other print/vis data func (as below)
     d3.selectAll(".cell")
         .each(function(d,i) {
             console.log("test");
@@ -360,13 +431,6 @@ async function initialize() {
             currSectorBox.select(".type-electrification > .slider-output").text(currAdjustedElectrification + "%");
         });
     /*
-
-    await pullStoreUSData();
-    if(state === "US") {
-      copyUSToStateData();
-    } else {
-      await pullStoreStateData();
-    }
 
     visualizeStateData();
 
