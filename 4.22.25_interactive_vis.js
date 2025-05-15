@@ -358,43 +358,52 @@ function updateSectorSlider(event) {
     // Probably best done instead by doing one big flat thing outside the if for both adjustments, basing it on base values as I already am, taking both adjusteds
     // into the makeup of it.
     let currSubset = sectorsCons.subsetsMap.get(currSector);
+
     if(currType === "demand") {
       currSubset["adjustedDemand"] = currValue;
-
-      currSubset.subSubsets.get("primary")["adjustedVal"] = (currValue / 100) * currSubset.subSubsets.get("primary")["baseVal"];
-      currSubset.subSubsets.get("electric")["adjustedVal"] = (currValue / 100) * currSubset.subSubsets.get("electric")["baseVal"];
-      currSubset.subSubsets.get("total")["adjustedVal"] = currSubset.subSubsets.get("primary")["adjustedVal"] + currSubset.subSubsets.get("electric")["adjustedVal"];
-
-      // primary pieces
-      for(let currPrimaryPiece of currSubset.subSubsets.get("primary").primaryPieces.values()) {
-        currPrimaryPiece["adjustedVal"] = (currValue / 100) * currPrimaryPiece["baseVal"];
-      }
-
     } else if(currType === "electrification") {
-      // so if electrification increases, the primary vals go down, proportional to their percentage of the total primary val, and the electric val goes up,
-      // and total stays the same no it doesn't because of the electric factor stuff it goes down
       currSubset["adjustedElectrification"] = currValue;
+    } else {
+      throw new Error("Type is not demand or electrification: " + currType);
+    }
 
-      // currToMove = the amount of primary GWh that needs to be either subtracted or added with respect to baseVal; the electric GWh to be subtracted/added will 
-      // be inverse, and multiplied by the corresponding efficiency factor
-      // this could be simpler based on adjustedVal/prior adjustedElectrification, but it would run away from the base vals with continual adjustments if so
-      // due to rounding
-      let baseElectrification = ((currSubset.subSubsets.get("electric")["baseVal"]/(currSubset.elecEfficiency)) / 
-        ((currSubset.subSubsets.get("primary")["baseVal"]) + (currSubset.subSubsets.get("electric")["baseVal"]/(currSubset.elecEfficiency)))) * 100;
-      let currToMove = (currSubset.subSubsets.get("primary")["baseVal"] / (100 - baseElectrification)) * (baseElectrification - currValue);
+    // TODO: obviously, test this math
 
-      currSubset.subSubsets.get("primary")["adjustedVal"] = currSubset.subSubsets.get("primary")["baseVal"] + currToMove;
-      currSubset.subSubsets.get("electric")["adjustedVal"] = currSubset.subSubsets.get("electric")["baseVal"] - (currToMove * currSubset.elecEfficiency);
-      currSubset.subSubsets.get("total")["adjustedVal"] = currSubset.subSubsets.get("primary")["adjustedVal"] + currSubset.subSubsets.get("electric")["adjustedVal"];
+    // base electrification, scaled by electric efficiency factor (so, can't just divide by total)
+    let baseElectrification = ((currSubset.subSubsets.get("electric")["baseVal"]/(currSubset.elecEfficiency)) / 
+      ((currSubset.subSubsets.get("primary")["baseVal"]) + (currSubset.subSubsets.get("electric")["baseVal"]/(currSubset.elecEfficiency)))) * 100;
 
-      // primary pieces, by ratio
-      for(let currPrimaryPiece of currSubset.subSubsets.get("primary").primaryPieces.values()) {
-        currPrimaryPiece["adjustedVal"] = currPrimaryPiece["baseVal"] + currToMove * (currPrimaryPiece["baseVal"] / currSubset.subSubsets.get("primary")["baseVal"]);
-      }
+    // from base val & electrification, we first scale the val by demand percent, then shift around as many percent-pieces as the electrification differs
+    // primary pieces get adjusted based on the ratio of the whole that they are (this can later be more personalized with addition of individual sliders)
+    // the electrification-movement consists of essentially dividing the scaled val by the amount of percentage points it corresponds to, then moving some to/away
+    // from it
+    let scaledPrimary = (currSubset.subSubsets.get("primary")["baseVal"] * (currSubset["adjustedDemand"] / 100));
+    let scaledElectric = (currSubset.subSubsets.get("electric")["baseVal"] * (currSubset["adjustedDemand"] / 100));
+    let toMove = ((scaledPrimary / (100 - baseElectrification)) * (baseElectrification - currSubset["adjustedElectrification"]))
+
+    currSubset.subSubsets.get("primary")["adjustedVal"] = scaledPrimary + toMove;
+    currSubset.subSubsets.get("electric")["adjustedVal"] = scaledElectric - (toMove * currSubset.elecEfficiency);
+    currSubset.subSubsets.get("total")["adjustedVal"] = currSubset.subSubsets.get("primary")["adjustedVal"] + currSubset.subSubsets.get("electric")["adjustedVal"];
+
+    for(let currPrimaryPiece of currSubset.subSubsets.get("primary").primaryPieces.values()) {
+      currPrimaryPiece["adjustedVal"] = currSubset.subSubsets.get("primary")["adjustedVal"] * 
+        (currPrimaryPiece["baseVal"] / currSubset.subSubsets.get("primary")["baseVal"]);
+    }
+
+    console.log("420");
+    console.log(currSubset.key + "----------");
+    console.log("adjustedDemand " + currSubset["adjustedDemand"]);
+    console.log("adjustedElectrification " + currSubset["adjustedElectrification"]);
+    console.log("primary " + currSubset.subSubsets.get("primary")["adjustedVal"]);
+    console.log("electric " + currSubset.subSubsets.get("electric")["adjustedVal"]);
+    console.log("total " + currSubset.subSubsets.get("total")["adjustedVal"]);
+    console.log("");
+    for(let currPrimaryPiece of currSubset.subSubsets.get("primary").primaryPieces.values()) {
+      console.log(currPrimaryPiece.key + " " + currPrimaryPiece["adjustedVal"]);
     }
 
     // Store event consequences
-    // TODO more or is it just the above?
+    // TODO more once CO2, electric breakdown
 
     // Print event update
     // TODO more
@@ -784,7 +793,7 @@ function storeSectorData(allFullsEnergy) {
       currSubset["adjustedElectrification"] = (currSubset.subSubsets.get("electric")["baseVal"]/(currSubset.elecEfficiency)) / 
         ((currSubset.subSubsets.get("primary")["baseVal"]) + (currSubset.subSubsets.get("electric")["baseVal"]/(currSubset.elecEfficiency)));
 
-      currSubset["adjustedDemand"] = currSubset.subSubsets.get("total")["baseVal"];
+      currSubset["adjustedDemand"] = 100;
       console.log("ELEC EFF " + currSubset.elecEfficiency);
       currSubset["adjustedElectrification"] = ((currSubset.subSubsets.get("electric")["baseVal"]/(currSubset.elecEfficiency)) / 
         ((currSubset.subSubsets.get("primary")["baseVal"]) + (currSubset.subSubsets.get("electric")["baseVal"]/(currSubset.elecEfficiency)))) * 100;
