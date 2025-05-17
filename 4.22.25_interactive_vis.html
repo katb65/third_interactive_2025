@@ -32,18 +32,20 @@
         <div class="cell sector-industrial">
             <p> Industrial </p>
             <p class = "test-text"></p>
+            <!-- TODO move this into a hidden blurb -->
+            <input class = "elec-efficiency" type="number" min="0" step="any"></input>
             <div class="slide-container type-demand">
                 <!-- TODO add text input box for precision? will need to filter out non numeric input + trigger slider event -->
                 <!-- TODO blurbs saying demand % inc's efffactor (by amt of things using it) whereas electrification % doesn't (by GWh)-->
                 <!-- TODO try converting to a D3 slider, this one locks up sometimes -->
                 <p> 0% </p>
-                <input type="range" min = "0" max = "500" value = "100" step = "0.1" class = "slider" disabled></input>
+                <input  class = "slider" type="range" min = "0" max = "500" value = "100" step = "0.1" disabled></input>
                 <p> 500% &nbsp;&nbsp;&nbsp; </p>
                 <p class = "slider-output"> 100% </p>
             </div>
             <div class="slide-container type-electrification">
                 <p> 0% </p>
-                <input type="range" min = "0" max = "100" value = "0" step = "0.1" class = "slider" disabled></input>
+                <input class = "slider"  type="range" min = "0" max = "100" value = "0" step = "0.1" disabled></input>
                 <p> 100% &nbsp;&nbsp;&nbsp; </p>
                 <p class = "slider-output"> </p>
             </div>
@@ -51,15 +53,16 @@
         <div class="cell sector-transportation">
             <p> Transportation </p>
             <p class = "test-text"></p>
+            <input class = "elec-efficiency" type="number" min="0" step="any"></input>
             <div class="slide-container type-demand">
                 <p> 0% </p>
-                <input type="range" min = "0" max = "500" value = "100" step = "1" class = "slider" disabled></input>
+                <input class = "slider"  type="range" min = "0" max = "500" value = "100" step = "1" disabled></input>
                 <p> 500% &nbsp;&nbsp;&nbsp; </p>
                 <p class = "slider-output"> 100% </p>
             </div>
             <div class="slide-container type-electrification">
                 <p> 0% </p>
-                <input type="range" min = "0" max = "100" value = "0" step = "1" class = "slider" disabled></input>
+                <input class = "slider" type="range" min = "0" max = "100" value = "0" step = "1" disabled></input>
                 <p> 100% &nbsp;&nbsp;&nbsp; </p>
                 <p class = "slider-output"> </p>
             </div>
@@ -67,15 +70,16 @@
         <div class="cell sector-commercial">
             <p> Commercial </p>
             <p class = "test-text"></p>
+            <input class = "elec-efficiency" type="number" min="0" step="any"></input>
             <div class="slide-container type-demand">
                 <p> 0% </p>
-                <input type="range" min = "0" max = "500" value = "100" step = "1" class = "slider" disabled></input>
+                <input class = "slider" type="range" min = "0" max = "500" value = "100" step = "1" disabled></input>
                 <p> 500% &nbsp;&nbsp;&nbsp; </p>
                 <p class = "slider-output"> 100% </p>
             </div>
             <div class="slide-container type-electrification">
                 <p> 0% </p>
-                <input type="range" min = "0" max = "100" value = "0" step = "1" class = "slider" disabled></input>
+                <input class = "slider" type="range" min = "0" max = "100" value = "0" step = "1" disabled></input>
                 <p> 100% &nbsp;&nbsp;&nbsp; </p>
                 <p class = "slider-output"> </p>
             </div>
@@ -83,15 +87,16 @@
         <div class="cell sector-residential">
             <p> Residential </p>
             <p class = "test-text"></p>
+            <input class = "elec-efficiency" type="number" min="0" step="any"></input>
             <div class="slide-container type-demand">
                 <p> 0% </p>
-                <input type="range" min = "0" max = "500" value = "100" step = "1" class = "slider" disabled></input>
+                <input class = "slider" type="range" min = "0" max = "500" value = "100" step = "1" disabled></input>
                 <p> 500% &nbsp;&nbsp;&nbsp; </p>
                 <p class = "slider-output"> 100% </p>
             </div>
             <div class="slide-container type-electrification">
                 <p> 0% </p>
-                <input type="range" min = "0" max = "100" value = "0" step = "1" class = "slider" disabled></input>
+                <input class = "slider" type="range" min = "0" max = "100" value = "0" step = "1" disabled></input>
                 <p> 100% &nbsp;&nbsp;&nbsp; </p>
                 <p class = "slider-output"> </p>
             </div>

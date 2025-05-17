@@ -256,7 +256,10 @@ d3.select("#GWh-or-GW-drop")
   .on("change", updateGWhorGW);
 
 d3.selectAll(".cell > * > .slider")
-    .on("change", (event) => updateSectorSlider(event));
+  .on("change", (event) => updateSectorSlider(event));
+
+d3.selectAll(".cell > .elec-efficiency")
+  .on("change", (event) => updateElecEfficiency(event));
 
 // -----------------------------------------------------
 // ---On-Change Functions: ---
@@ -403,6 +406,30 @@ function updateSectorSlider(event) {
     currSliderBox.select(".slider-output").text(currValue + "%")
 }
 
+// Called on user changing the electricity efficiency factor for some sector
+function updateElecEfficiency(event) {
+    // Get updated value
+    let currValue = parseFloat(d3.select(event.target).property("value"));
+
+    if(currValue < 0) {
+      return; // invalid input, but don't want to error out over it
+    }
+
+    // Narrow down where event occurred
+    let currSectorBox = d3.select(event.target.parentNode);
+
+    let currSector = currSectorBox.attr("class").split(" ")
+        .find((element) => /sector-/.test(element)).slice(7); // locate the class pertaining to the sector name & isolate it
+
+    console.log("elecEfficiency " + currValue); 
+
+    let currSubset = sectorsCons.subsetsMap.get(currSector);
+
+    currSubset.elecEfficiency = currValue;
+
+    //TODO update %demand???, then all outputs (pull out the above calculating function into a helper to call from both of these)
+}
+
 // -----------------------------------------------------
 // ---Main Functions: ---
 // -----------------------------------------------------
@@ -428,9 +455,11 @@ async function initialize() {
                 .find((element) => /sector-/.test(element)).slice(7);
 
             let currAdjustedElectrification = sectorsCons.subsetsMap.get(currSector)["adjustedElectrification"];
+            let currElecEfficiency = sectorsCons.subsetsMap.get(currSector)["elecEfficiency"];
 
             currSectorBox.select(".type-electrification > .slider").property("value", currAdjustedElectrification);
             currSectorBox.select(".type-electrification > .slider-output").text(currAdjustedElectrification + "%");
+            currSectorBox.select(".elec-efficiency").property("value", currElecEfficiency);
         });
     /*
 
