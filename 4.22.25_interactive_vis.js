@@ -103,15 +103,13 @@ class SectorSubset {
     // also here stored are %s whereas that is actual vals
 
     // Base demand can be found in the "total" subSubset baseVal; 
-    // Base electrification can be calculated by a combination of electric subSubset's baseVal, primary subSubset's baseVal, and the efficiency factor 
-    // to level electric to a "user-count" sort of demand scale rather than "GWh-count", since primary often uses more energy to accomplish the same 
-    // task as electricity does
+    // Base electrification can be calculated by "electric" divided by "total" baseVal
 
     elecEfficiency; // for this sector, proportion of electricity needed to primary energy to accomplish same tasks (due to certain heat/power savings)
 
     // The values the user has moved to on the sliders for this sector
     adjustedDemand; // % of base demand (since GWh will vary by electrification due to efficiency factors)
-    adjustedElectrification; // % of adjustedDemand electrified (with efficiency factor taken into account)
+    adjustedElectrification; // % of adjustedDemand electrified (efficiency factor not taken into account - just raw electric/total energy)
 
     // Maps of sub subset names, to IDs used to index into EIA and curr state vals for curr year for that ID
     subSubsets; 
@@ -217,18 +215,18 @@ let sectorsCons = {idAllFuelCO2: "TO", idElecSectorCO2: "EC", idCoalCO2: "CO", i
 // using end-use, not net, for total (net was too small, primary parts overflowed); so we can't pull primary (similar process subtractions in it as in net), 
 // we must subtract electric to get it
 // TODO change the factors from 0.8 to be accurate ones
-sectorsCons.subsetsMap.set("residential", new SectorSubset("residential", 0.8, "ESRCB", "TNRCB",
+sectorsCons.subsetsMap.set("residential", new SectorSubset("residential", 0.2, "ESRCB", "TNRCB",
                                                   null, "SORCB", "GERCB", null,
                                                   "CLRCB", "NGRCB", "SFRCB", "PARCB")); // TODO CO2? "RC"
-sectorsCons.subsetsMap.set("commercial", new SectorSubset("commercial", 0.8, "ESCCB", "TNCCB",
+sectorsCons.subsetsMap.set("commercial", new SectorSubset("commercial", 0.2, "ESCCB", "TNCCB",
                                                 "WYCCB", "SOCCB", "GECCB", "HYCCB",
                                                 "CLCCB", "NGCCB", "SFCCB", "PACCB")); // TODO CO2 "CC"
 // the ID is slightly different for industrial electricity than the others: it's "excluding refinery use" - hence "ESISB", not "ESICB" (the latter doesn't add up)
-sectorsCons.subsetsMap.set("industrial", new SectorSubset("industrial", 0.8, "ESISB", "TNICB",
+sectorsCons.subsetsMap.set("industrial", new SectorSubset("industrial", 0.82, "ESISB", "TNICB",
                                                 "WYICB", "SOICB", "GEICB", "HYICB",
                                                 "CLICB", "NGICB", "SFINB", "PAICB")); // TODO CO2 "IC"
 // NGASB not NGACB for transportation's natural gas (there's no supplemental fuels to subtract out by ID here)
-sectorsCons.subsetsMap.set("transportation", new SectorSubset("transportation", 0.8, "ESACB", "TNACB",
+sectorsCons.subsetsMap.set("transportation", new SectorSubset("transportation", 0.2, "ESACB", "TNACB",
                                                     null, null, null, null,
                                                     "CLACB", "NGASB", null, "PAACB")); // TODO CO2 "TC"
 
@@ -282,7 +280,7 @@ async function updateState() {
       let currSector = currSectorBox.attr("class").split(" ")
           .find((element) => /sector-/.test(element)).slice(7);
 
-      let currAdjustedElectrification = sectorsCons.subsetsMap.get(currSector).adjustedElectrification;
+      let currAdjustedElectrification = sectorsCons.subsetsMap.get(currSector)["adjustedElectrification"];
 
       currSectorBox.select(".type-electrification > .slider").property("value", currAdjustedElectrification);
       currSectorBox.select(".type-electrification > .slider-output").text(currAdjustedElectrification + "%");
@@ -313,7 +311,7 @@ async function updateYear() {
       let currSector = currSectorBox.attr("class").split(" ")
           .find((element) => /sector-/.test(element)).slice(7);
 
-      let currAdjustedElectrification = sectorsCons.subsetsMap.get(currSector).adjustedElectrification;
+      let currAdjustedElectrification = sectorsCons.subsetsMap.get(currSector)["adjustedElectrification"];
 
       currSectorBox.select(".type-electrification > .slider").property("value", currAdjustedElectrification);
       currSectorBox.select(".type-electrification > .slider-output").text(currAdjustedElectrification + "%");
@@ -337,6 +335,7 @@ function updateGWhorGW() {
   */
 }
 
+// Called on user sliding a demand or electrification % slider within a sector box, changes & reprints corresponding internal data
 function updateSectorSlider(event) {
     // Get updated value
     let currValue = parseFloat(d3.select(event.target).property("value"));
@@ -353,10 +352,7 @@ function updateSectorSlider(event) {
     console.log(currSector);
     console.log(currType);
 
-    // store data + all the primary pieces within this sector must now be proportionally adjusted to this new demand/electrification
-    // TODO switched from adjusted-based to base-based but completely forgot to take into account adjusted elec in the demand if and adjusted demand in the elec if. 
-    // Probably best done instead by doing one big flat thing outside the if for both adjustments, basing it on base values as I already am, taking both adjusteds
-    // into the makeup of it.
+    // Store data + all the primary pieces within this sector must now be proportionally adjusted to this new demand/electrification
     let currSubset = sectorsCons.subsetsMap.get(currSector);
 
     if(currType === "demand") {
@@ -367,22 +363,20 @@ function updateSectorSlider(event) {
       throw new Error("Type is not demand or electrification: " + currType);
     }
 
-    // TODO: obviously, test this math
-
-    // base electrification, scaled by electric efficiency factor (so, can't just divide by total)
-    let baseElectrification = ((currSubset.subSubsets.get("electric")["baseVal"]/(currSubset.elecEfficiency)) / 
-      ((currSubset.subSubsets.get("primary")["baseVal"]) + (currSubset.subSubsets.get("electric")["baseVal"]/(currSubset.elecEfficiency)))) * 100;
-
-    // from base val & electrification, we first scale the val by demand percent, then shift around as many percent-pieces as the electrification differs
-    // primary pieces get adjusted based on the ratio of the whole that they are (this can later be more personalized with addition of individual sliders)
-    // the electrification-movement consists of essentially dividing the scaled val by the amount of percentage points it corresponds to, then moving some to/away
-    // from it
+    // from base val & electrification, we first scale the val by demand percent, then shift pieces to fit the electrification percent
     let scaledPrimary = (currSubset.subSubsets.get("primary")["baseVal"] * (currSubset["adjustedDemand"] / 100));
     let scaledElectric = (currSubset.subSubsets.get("electric")["baseVal"] * (currSubset["adjustedDemand"] / 100));
-    let toMove = ((scaledPrimary / (100 - baseElectrification)) * (baseElectrification - currSubset["adjustedElectrification"]))
 
-    currSubset.subSubsets.get("primary")["adjustedVal"] = scaledPrimary + toMove;
-    currSubset.subSubsets.get("electric")["adjustedVal"] = scaledElectric - (toMove * currSubset.elecEfficiency);
+    // electrification % = electric/total energy
+    // electric energy essentially has the efficiency factor included within itself
+    // thus (scaledElectric + x*eff) / ((scaledPrimary - x) + (scaledElectric + x*eff)) = new electrification %, calculate for x
+    // x = (new%*(scaledPrimary + scaledElectric) - scaledElectric)/(eff - new%*eff + new%)
+
+    let toMove = ((currSubset["adjustedElectrification"] / 100) * (scaledPrimary + scaledElectric) - scaledElectric) / 
+      (currSubset["elecEfficiency"] - (currSubset["adjustedElectrification"] / 100)*currSubset["elecEfficiency"] + (currSubset["adjustedElectrification"] / 100));
+
+    currSubset.subSubsets.get("primary")["adjustedVal"] = scaledPrimary - toMove;
+    currSubset.subSubsets.get("electric")["adjustedVal"] = scaledElectric + (toMove * currSubset["elecEfficiency"]);
     currSubset.subSubsets.get("total")["adjustedVal"] = currSubset.subSubsets.get("primary")["adjustedVal"] + currSubset.subSubsets.get("electric")["adjustedVal"];
 
     for(let currPrimaryPiece of currSubset.subSubsets.get("primary").primaryPieces.values()) {
@@ -390,7 +384,6 @@ function updateSectorSlider(event) {
         (currPrimaryPiece["baseVal"] / currSubset.subSubsets.get("primary")["baseVal"]);
     }
 
-    console.log("420");
     console.log(currSubset.key + "----------");
     console.log("adjustedDemand " + currSubset["adjustedDemand"]);
     console.log("adjustedElectrification " + currSubset["adjustedElectrification"]);
@@ -434,7 +427,7 @@ async function initialize() {
             let currSector = currSectorBox.attr("class").split(" ")
                 .find((element) => /sector-/.test(element)).slice(7);
 
-            let currAdjustedElectrification = sectorsCons.subsetsMap.get(currSector).adjustedElectrification;
+            let currAdjustedElectrification = sectorsCons.subsetsMap.get(currSector)["adjustedElectrification"];
 
             currSectorBox.select(".type-electrification > .slider").property("value", currAdjustedElectrification);
             currSectorBox.select(".type-electrification > .slider-output").text(currAdjustedElectrification + "%");
@@ -790,13 +783,8 @@ function storeSectorData(allFullsEnergy) {
       currSubset.subSubsets.get("primary")["adjustedVal"] = currSubset.subSubsets.get("primary")["baseVal"];
       currSubset.subSubsets.get("electric")["adjustedVal"] = currSubset.subSubsets.get("electric")["baseVal"];
 
-      currSubset["adjustedElectrification"] = (currSubset.subSubsets.get("electric")["baseVal"]/(currSubset.elecEfficiency)) / 
-        ((currSubset.subSubsets.get("primary")["baseVal"]) + (currSubset.subSubsets.get("electric")["baseVal"]/(currSubset.elecEfficiency)));
-
       currSubset["adjustedDemand"] = 100;
-      console.log("ELEC EFF " + currSubset.elecEfficiency);
-      currSubset["adjustedElectrification"] = ((currSubset.subSubsets.get("electric")["baseVal"]/(currSubset.elecEfficiency)) / 
-        ((currSubset.subSubsets.get("primary")["baseVal"]) + (currSubset.subSubsets.get("electric")["baseVal"]/(currSubset.elecEfficiency)))) * 100;
+      currSubset["adjustedElectrification"] = (((currSubset.subSubsets.get("electric")["baseVal"])/(currSubset.subSubsets.get("total")["baseVal"])) * 100).toFixed(2);
     }
 }
 
