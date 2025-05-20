@@ -340,6 +340,7 @@ function updateGWhorGW() {
 
 // Called on user sliding a demand or electrification % slider within a sector box, changes & reprints corresponding internal data
 function updateSectorSlider(event) {
+  
     // Get updated value
     let currValue = parseFloat(d3.select(event.target).property("value"));
 
@@ -355,7 +356,7 @@ function updateSectorSlider(event) {
     console.log(currSector);
     console.log(currType);
 
-    // Store data + all the primary pieces within this sector must now be proportionally adjusted to this new demand/electrification
+    // Store data + all the primary pieces within this sector must be proportionally adjusted
     let currSubset = sectorsCons.subsetsMap.get(currSector);
 
     if(currType === "demand") {
@@ -366,43 +367,12 @@ function updateSectorSlider(event) {
       throw new Error("Type is not demand or electrification: " + currType);
     }
 
-    // from base val & electrification, we first scale the val by demand percent, then shift pieces to fit the electrification percent
-    let scaledPrimary = (currSubset.subSubsets.get("primary")["baseVal"] * (currSubset["adjustedDemand"] / 100));
-    let scaledElectric = (currSubset.subSubsets.get("electric")["baseVal"] * (currSubset["adjustedDemand"] / 100));
-
-    // electrification % = electric/total energy
-    // electric energy essentially has the efficiency factor included within itself
-    // thus (scaledElectric + x*eff) / ((scaledPrimary - x) + (scaledElectric + x*eff)) = new electrification %, calculate for x
-    // x = (new%*(scaledPrimary + scaledElectric) - scaledElectric)/(eff - new%*eff + new%)
-
-    let toMove = ((currSubset["adjustedElectrification"] / 100) * (scaledPrimary + scaledElectric) - scaledElectric) / 
-      (currSubset["elecEfficiency"] - (currSubset["adjustedElectrification"] / 100)*currSubset["elecEfficiency"] + (currSubset["adjustedElectrification"] / 100));
-
-    currSubset.subSubsets.get("primary")["adjustedVal"] = scaledPrimary - toMove;
-    currSubset.subSubsets.get("electric")["adjustedVal"] = scaledElectric + (toMove * currSubset["elecEfficiency"]);
-    currSubset.subSubsets.get("total")["adjustedVal"] = currSubset.subSubsets.get("primary")["adjustedVal"] + currSubset.subSubsets.get("electric")["adjustedVal"];
-
-    for(let currPrimaryPiece of currSubset.subSubsets.get("primary").primaryPieces.values()) {
-      currPrimaryPiece["adjustedVal"] = currSubset.subSubsets.get("primary")["adjustedVal"] * 
-        (currPrimaryPiece["baseVal"] / currSubset.subSubsets.get("primary")["baseVal"]);
-    }
-
-    console.log(currSubset.key + "----------");
-    console.log("adjustedDemand " + currSubset["adjustedDemand"]);
-    console.log("adjustedElectrification " + currSubset["adjustedElectrification"]);
-    console.log("primary " + currSubset.subSubsets.get("primary")["adjustedVal"]);
-    console.log("electric " + currSubset.subSubsets.get("electric")["adjustedVal"]);
-    console.log("total " + currSubset.subSubsets.get("total")["adjustedVal"]);
-    console.log("");
-    for(let currPrimaryPiece of currSubset.subSubsets.get("primary").primaryPieces.values()) {
-      console.log(currPrimaryPiece.key + " " + currPrimaryPiece["adjustedVal"]);
-    }
-
     // Store event consequences
     // TODO more once CO2, electric breakdown
+    calculateStoreAdjustedVals(currSubset);
 
     // Print event update
-    // TODO more
+    // TODO more (vis)
     currSliderBox.select(".slider-output").text(currValue + "%")
 }
 
@@ -412,7 +382,8 @@ function updateElecEfficiency(event) {
     let currValue = parseFloat(d3.select(event.target).property("value"));
 
     if(currValue < 0) {
-      return; // invalid input, but don't want to error out over it
+      throw new Error("Invalid electric efficiency " + currValue + ", ignoring");
+      return;
     }
 
     // Narrow down where event occurred
@@ -425,9 +396,13 @@ function updateElecEfficiency(event) {
 
     let currSubset = sectorsCons.subsetsMap.get(currSector);
 
+    // Store new efficiency
     currSubset.elecEfficiency = currValue;
 
-    //TODO update %demand???, then all outputs (pull out the above calculating function into a helper to call from both of these)
+    // Update data to reflect it
+    calculateStoreAdjustedVals(currSubset);
+
+    // TODO print vis
 }
 
 // -----------------------------------------------------
@@ -576,6 +551,43 @@ function enableUserInput() {
         .attr("disabled", null);
     d3.selectAll(".cell > * > .slider")
         .attr("disabled", null);
+}
+
+// For updateSectorSlider(), updateElecEfficiency()
+// Calculates & store the current adjustedVals for the subSubsets & primary pieces of passed in sector based on the current
+// adjustedDemand and adjustedElectrification
+function calculateStoreAdjustedVals(currSubset) {
+    // from base val & electrification, we first scale the val by demand percent, then shift pieces to fit the electrification percent
+    let scaledPrimary = (currSubset.subSubsets.get("primary")["baseVal"] * (currSubset["adjustedDemand"] / 100));
+    let scaledElectric = (currSubset.subSubsets.get("electric")["baseVal"] * (currSubset["adjustedDemand"] / 100));
+
+    // electrification % = electric/total energy
+    // electric energy essentially has the efficiency factor included within itself
+    // thus (scaledElectric + x*eff) / ((scaledPrimary - x) + (scaledElectric + x*eff)) = new electrification %, calculate for x
+    // x = (new%*(scaledPrimary + scaledElectric) - scaledElectric)/(eff - new%*eff + new%)
+
+    let toMove = ((currSubset["adjustedElectrification"] / 100) * (scaledPrimary + scaledElectric) - scaledElectric) / 
+      (currSubset["elecEfficiency"] - (currSubset["adjustedElectrification"] / 100)*currSubset["elecEfficiency"] + (currSubset["adjustedElectrification"] / 100));
+
+    currSubset.subSubsets.get("primary")["adjustedVal"] = scaledPrimary - toMove;
+    currSubset.subSubsets.get("electric")["adjustedVal"] = scaledElectric + (toMove * currSubset["elecEfficiency"]);
+    currSubset.subSubsets.get("total")["adjustedVal"] = currSubset.subSubsets.get("primary")["adjustedVal"] + currSubset.subSubsets.get("electric")["adjustedVal"];
+
+    for(let currPrimaryPiece of currSubset.subSubsets.get("primary").primaryPieces.values()) {
+      currPrimaryPiece["adjustedVal"] = currSubset.subSubsets.get("primary")["adjustedVal"] * 
+        (currPrimaryPiece["baseVal"] / currSubset.subSubsets.get("primary")["baseVal"]);
+    }
+
+    console.log(currSubset.key + "----------");
+    console.log("adjustedDemand " + currSubset["adjustedDemand"]);
+    console.log("adjustedElectrification " + currSubset["adjustedElectrification"]);
+    console.log("primary " + currSubset.subSubsets.get("primary")["adjustedVal"]);
+    console.log("electric " + currSubset.subSubsets.get("electric")["adjustedVal"]);
+    console.log("total " + currSubset.subSubsets.get("total")["adjustedVal"]);
+    console.log("");
+    for(let currPrimaryPiece of currSubset.subSubsets.get("primary").primaryPieces.values()) {
+      console.log(currPrimaryPiece.key + " " + currPrimaryPiece["adjustedVal"]);
+    }
 }
 
 // For initializeYears(), pullStoreData()
