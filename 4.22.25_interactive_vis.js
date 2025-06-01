@@ -436,6 +436,9 @@ async function initialize() {
             currSectorBox.select(".type-electrification > .slider-output").text(currAdjustedElectrification + "%");
             currSectorBox.select(".elec-efficiency").property("value", currElecEfficiency);
         });
+
+
+    visualizeSectorData();
     /*
 
     visualizeStateData();
@@ -489,7 +492,7 @@ async function initializeYears() {
     year = years[0]; // will be latest year, due to sorting of request & JavaScript map key ordering mechanics
     // TODO ^ WILL be latest year once I pull them
 
-    // TODO make this actually pull years info (combining the two vis's data sources to cross ref all avail years)
+    // TODO make this actually pull years info (combining the two vis's data sources to cross ref all avail years - energy, electricity, CO2)
 }
 
 // Acquire per-sector fuel consumption info for current-set state and year and store in the SectorSubsets
@@ -507,7 +510,54 @@ async function pullStoreData() {
     storeSectorData(allFullsEnergy); // TODO later pass allFullsCO2 to store also - and presumably electricity breakdown as well
   
     //checkTotalParts();
-  }
+}
+
+// Visualize & print relevant text for the energy data contained in the four sector boxes (bar graph charts)
+// NOTE: assumes user input is locked in the process; and does not unlock it (needs an outer layer function to do so)
+function visualizeSectorData() {
+  // TODO stacked bar chart
+
+  let groups = ["solar", "wind"]; // TODO storage system up in display vars where each of these maps to their respective pieces
+  let tempData = [{stack: "first", group: "solar", val: 1}, {stack: "second", group: "solar", val: 2}, 
+    {stack: "first", group: "wind", val: 3}, {stack: "second", group: "wind", val: 4}];
+
+  console.log(d3.index(tempData, d=>d.stack, d=>d.group));
+
+  let stackedData = d3.stack()
+    .keys(groups)
+    .value(([, d], key) => (d.get(key)["val"])) // this uses this format because the data is the index created by the below, aka a nested map by the 2 keys (so d is inner map)
+    (d3.index(tempData, d=>d.stack, d=>d.group)); // TODO simplify away the index?
+
+  
+  let yScale = d3.scaleLinear().domain([0, 10]).range([100, 0]) // TODO figure out the actual domain later
+  let xScale = d3.scaleBand()
+    .domain(["first", "second"])
+    .range([100, 200]) // TODO put variables for margins uptop
+    .padding(0.1);
+  let color = d3.scaleOrdinal() //TODO
+    .domain(["solar", "wind"])
+    .range(['#e41a1c','#377eb8'])
+
+  console.log(stackedData);
+  console.log(xScale("first"))
+
+  d3.select(".test-svg")
+    .selectAll("g")
+    .data(stackedData)
+    .join("g")
+      .attr("fill", d=>color(d.key))
+    .selectAll("rect")
+      .data(d=>d)
+      .join("rect")
+      .attr("x", d=>xScale(d.data[0]))
+      .attr("y", d=>yScale(d[1]))
+      .attr("height", function(d) { return yScale(d[0]) - yScale(d[1]); })
+      .attr("width", 10) // TODO should be something to do with x.bandwidth() not a static val
+
+  /*
+    .keys(/*TODO primary pieces names are the keys? no i think this should be the groups... idk why example has it otherwise)
+    (/*TODO objects with primary piece names arranged in array, one object per group? or does this need a .value as in d3 stack... ) */
+}
 
 // -----------------------------------------------------
 // ---Helper Functions: ---
@@ -562,7 +612,7 @@ function calculateStoreAdjustedVals(currSubset) {
     let scaledElectric = (currSubset.subSubsets.get("electric")["baseVal"] * (currSubset["adjustedDemand"] / 100));
 
     // electrification % = electric/total energy
-    // electric energy essentially has the efficiency factor included within itself
+    // electric energy essentially has the efficiency factor included within itselft 
     // thus (scaledElectric + x*eff) / ((scaledPrimary - x) + (scaledElectric + x*eff)) = new electrification %, calculate for x
     // x = (new%*(scaledPrimary + scaledElectric) - scaledElectric)/(eff - new%*eff + new%)
 
