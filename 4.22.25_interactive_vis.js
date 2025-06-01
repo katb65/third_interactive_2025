@@ -241,6 +241,15 @@ let formatCommas = d3.format(",.2f");
 // consumable energy formats; adjusted with user's selection)
 let GWhorGW = "GWh";
 
+// Which primary & electric fuel pieces are considered green vs not green (set to defaults, adjusted by user)
+// TODO: ASK?: the green & ngreen pieces are slightly different for primary vs electric... nuclear ofc just doesn't exist in primary, but biomass?
+// is that part of "other" for primary? does that mean we then separate it from other for the primaries? there is no "biomass" section per sector;
+// there is however an "all petroleum products" vs "all petroleum products excluding biofuels" division per sector. are all biofuels petroleum - doubt it,
+// things are burned too? we could just group them into "other", but also issue 2: electricity gen vis doesn't have petroleum as a division, in turn -
+// oh i think we combined it into other since we do have a petroleum liquids/petroleum coke section in the EIA data
+let greenPieces = ["wind", "solar", "geothermal", "hydroelectric", "nuclear", "biomass"];
+let nGreenPieces = ["coal", "natural gas", "petroleum", "other"];
+
 // -----------------------------------------------------
 // ---HTML Element Adjustments: ---
 // -----------------------------------------------------
@@ -516,6 +525,10 @@ async function pullStoreData() {
 // NOTE: assumes user input is locked in the process; and does not unlock it (needs an outer layer function to do so)
 function visualizeSectorData() {
   // TODO stacked bar chart
+  // Layout number specifics
+  let currMargin = 30;
+  let currHeight = parseInt(d3.select(".cell > * > .vis").style("height").slice(0, -2));
+  let currWidth = parseInt(d3.select(".cell > * > .vis").style("width").slice(0, -2));
 
   let groups = ["solar", "wind"]; // TODO storage system up in display vars where each of these maps to their respective pieces
   let tempData = [{stack: "first", group: "solar", val: 1}, {stack: "second", group: "solar", val: 2}, 
@@ -526,13 +539,18 @@ function visualizeSectorData() {
   let stackedData = d3.stack()
     .keys(groups)
     .value(([, d], key) => (d.get(key)["val"])) // this uses this format because the data is the index created by the below, aka a nested map by the 2 keys (so d is inner map)
-    (d3.index(tempData, d=>d.stack, d=>d.group)); // TODO simplify away the index?
+    (d3.index(tempData, d=>d.stack, d=>d.group));
 
+  let maxTotal = d3.max(stackedData, d => d3.max(d, d => d[1]));
+
+  console.log("max " + d3.max(tempData, d=>d.val)); 
   
-  let yScale = d3.scaleLinear().domain([0, 10]).range([100, 0]) // TODO figure out the actual domain later
+  let yScale = d3.scaleLinear()
+    .domain([0, maxTotal])
+    .range([currHeight - currMargin, currMargin]) // max functions use array + accessor (nested)
   let xScale = d3.scaleBand()
     .domain(["first", "second"])
-    .range([100, 200]) // TODO put variables for margins uptop
+    .range([currMargin, currWidth - currMargin]) 
     .padding(0.1);
   let color = d3.scaleOrdinal() //TODO
     .domain(["solar", "wind"])
@@ -541,7 +559,8 @@ function visualizeSectorData() {
   console.log(stackedData);
   console.log(xScale("first"))
 
-  d3.select(".test-svg")
+  // Bars
+  d3.selectAll(".cell > * > .vis")
     .selectAll("g")
     .data(stackedData)
     .join("g")
@@ -552,11 +571,19 @@ function visualizeSectorData() {
       .attr("x", d=>xScale(d.data[0]))
       .attr("y", d=>yScale(d[1]))
       .attr("height", function(d) { return yScale(d[0]) - yScale(d[1]); })
-      .attr("width", 10) // TODO should be something to do with x.bandwidth() not a static val
+      .attr("width", xScale.bandwidth())
 
-  /*
-    .keys(/*TODO primary pieces names are the keys? no i think this should be the groups... idk why example has it otherwise)
-    (/*TODO objects with primary piece names arranged in array, one object per group? or does this need a .value as in d3 stack... ) */
+  // X-axis
+  d3.selectAll(".cell > * > .vis")
+    .append("g")
+    .attr("transform", "translate(0, " + (currHeight - currMargin) + ")")
+    .call(d3.axisBottom(xScale).tickSizeOuter(0));
+
+  // Y-axis
+  d3.selectAll(".cell > * >.vis")
+    .append("g")
+    .attr("transform", "translate(" + currMargin + ", 0)")
+    .call(d3.axisLeft(yScale).tickValues([0, maxTotal]));
 }
 
 // -----------------------------------------------------

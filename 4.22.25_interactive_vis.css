@@ -14,3 +14,13 @@
 div.slide-container * {
     display: inline;
 }
+
+.cell.vis-container {
+    width: 300px; 
+    height: 150px;
+}
+
+.cell.vis {
+    width: 300px; 
+    height: 150px;
+}
