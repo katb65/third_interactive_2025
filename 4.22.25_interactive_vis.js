@@ -247,8 +247,36 @@ let GWhorGW = "GWh";
 // there is however an "all petroleum products" vs "all petroleum products excluding biofuels" division per sector. are all biofuels petroleum - doubt it,
 // things are burned too? we could just group them into "other", but also issue 2: electricity gen vis doesn't have petroleum as a division, in turn -
 // oh i think we combined it into other since we do have a petroleum liquids/petroleum coke section in the EIA data
-let greenPieces = ["wind", "solar", "geothermal", "hydroelectric", "nuclear", "biomass"];
-let nGreenPieces = ["coal", "natural gas", "petroleum", "other"];
+// TODO for now just load in the primary pieces' parts and we'll think about how to tie in electric later
+let greenMap = new Map();
+
+greenMap.set("wind", "green");
+greenMap.set("solar", "green");
+greenMap.set("geothermal", "green");
+greenMap.set("hydroelectric", "green");
+
+greenMap.set("coal", "not green");
+greenMap.set("natural gas", "not green");
+greenMap.set("petroleum", "not green");
+greenMap.set("other", "not green");
+
+// Color map
+// Each piece will correspond to the same hue of color across sectors, but will be lighter shade if declared green by user than if not
+// Using 
+// TODO: add colorscales for pieces from electric + for pieces that some primary pieces will be subsplittable into (aviation?)
+let colorMap = new Map();
+
+colorMap.set("electric", d3.interpolateRgb("rgb(255, 255, 255)", d3.schemeTableau10[0]));
+
+colorMap.set("wind", d3.interpolateRgb("rgb(255, 255, 255)", d3.schemeTableau10[1]));
+colorMap.set("solar", d3.interpolateRgb("rgb(255, 255, 255)", d3.schemeTableau10[2]));
+colorMap.set("geothermal", d3.interpolateRgb("rgb(255, 255, 255)", d3.schemeTableau10[3]));
+colorMap.set("hydroelectric", d3.interpolateRgb("rgb(255, 255, 255)", d3.schemeTableau10[4]));
+
+colorMap.set("coal", d3.interpolateRgb("rgb(255, 255, 255)", d3.schemeTableau10[5]));
+colorMap.set("natural gas", d3.interpolateRgb("rgb(255, 255, 255)", d3.schemeTableau10[6]));
+colorMap.set("petroleum", d3.interpolateRgb("rgb(255, 255, 255)", d3.schemeTableau10[7]));
+colorMap.set("other", d3.interpolateRgb("rgb(255, 255, 255)", d3.schemeTableau10[8]));
 
 // -----------------------------------------------------
 // ---HTML Element Adjustments: ---
@@ -298,11 +326,9 @@ async function updateState() {
       currSectorBox.select(".type-electrification > .slider-output").text(currAdjustedElectrification + "%");
   });
 
-  enableUserInput();
+  visualizeSectorData();
 
-    /*
-    visualizeStateData(); 
-    */
+  enableUserInput();
 }
 
 // Called on user change of year selection, changes year variable then
@@ -329,12 +355,9 @@ async function updateYear() {
       currSectorBox.select(".type-electrification > .slider-output").text(currAdjustedElectrification + "%");
   });
 
+  visualizeSectorData();
+
   enableUserInput();
-
-    /*
-
-    visualizeStateData();
-    */
 }
 
 // Called on user change of GW vs GWh display selection, changes GWhorGW and updates text output
@@ -380,9 +403,9 @@ function updateSectorSlider(event) {
     // TODO more once CO2, electric breakdown
     calculateStoreAdjustedVals(currSubset);
 
-    // Print event update
-    // TODO more (vis)
-    currSliderBox.select(".slider-output").text(currValue + "%")
+    // Print/visualize event update
+    visualizeSectorData(currSector);
+    currSliderBox.select(".slider-output").text(currValue + "%");
 }
 
 // Called on user changing the electricity efficiency factor for some sector
@@ -411,7 +434,8 @@ function updateElecEfficiency(event) {
     // Update data to reflect it
     calculateStoreAdjustedVals(currSubset);
 
-    // TODO print vis
+    // Visualize event update
+    visualizeSectorData(currSector);
 }
 
 // -----------------------------------------------------
@@ -498,7 +522,7 @@ async function initializeYears() {
     .property("value", d=>d)
     .text(d=>d);
 
-    year = years[0]; // will be latest year, due to sorting of request & JavaScript map key ordering mechanics
+    year = 2010; // will be latest year, due to sorting of request & JavaScript map key ordering mechanics
     // TODO ^ WILL be latest year once I pull them
 
     // TODO make this actually pull years info (combining the two vis's data sources to cross ref all avail years - energy, electricity, CO2)
@@ -521,9 +545,106 @@ async function pullStoreData() {
     //checkTotalParts();
 }
 
-// Visualize & print relevant text for the energy data contained in the four sector boxes (bar graph charts)
+// Visualize & print relevant text for the energy data contained in one or all of the four sector boxes (bar graph charts)
+// Optional argument tells it which sector to update; else, updates all four
 // NOTE: assumes user input is locked in the process; and does not unlock it (needs an outer layer function to do so)
-function visualizeSectorData() {
+function visualizeSectorData(currSector = null) {
+  if(currSector === null) {
+    for(let currKey of sectorsCons.subsetsMap.keys()) {
+      visualizeSectorData(currKey);
+    }
+  } else {
+    // Layout number specifics
+    let currMargin = 20;
+    let currLeftMargin = 60;
+    let currHeight = parseInt(d3.select(".cell > * > .vis").style("height").slice(0, -2));
+    let currWidth = parseInt(d3.select(".cell > * > .vis").style("width").slice(0, -2));
+
+    let currSectorObj = sectorsCons.subsetsMap.get(currSector);
+    let currPrimaryPieces = currSectorObj.subSubsets.get("primary").primaryPieces;
+
+    // Create object usable by the vis
+    let currData = [];
+    let currStacks = new Set();
+    let currGroups = ["electric"];
+    currGroups.push(...Array.from(currPrimaryPieces.keys()));
+
+    currData.push({stack: "electric", group: "electric", val: currSectorObj.subSubsets.get("electric")["adjustedVal"]}) 
+    currStacks.add("electric");
+    for(let currKey of currPrimaryPieces.keys()) {
+      currData.push({stack: greenMap.get(currKey), group: currKey, val: currPrimaryPieces.get(currKey)["adjustedVal"]})
+      currStacks.add(greenMap.get(currKey));
+    }
+
+    console.log(currData);
+    console.log(d3.index(currData, d=>d.stack, d=>d.group));
+
+    let stackedData = d3.stack()
+      .keys(currGroups)
+      .value(([, d], key) => { // this uses this format because the data is the index created by the below, aka a nested map by the 2 keys (so d is inner map)
+        if(d.has(key)) {
+          return d.get(key)["val"];
+        } else {
+          return 0;
+        }
+      }) 
+      (d3.index(currData, d=>d.stack, d=>d.group));
+
+    let maxTotal = d3.max(stackedData, d => d3.max(d, d => d[1]));
+    
+    let yScale = d3.scaleLinear() // TODO: ASK: should this y-scale be global so the squares are cross comparable to each other? maybe have it be global
+    // at a set number so max is not updated at every slide; and move to higher or lower set number when some sector crosses that threshold
+      .domain([0, maxTotal])
+      .range([currHeight - currMargin, currMargin]) // max functions use array + accessor (nested)
+    let xScale = d3.scaleBand()
+      .domain(Array.from(currStacks))
+      .range([currLeftMargin, currWidth - currMargin]) 
+      .padding(0.1);
+  
+    console.log(stackedData);
+
+    // TODO why does green not render! oh maybe just for 2010..?
+  
+    // Bars
+    d3.select(".cell.sector-" + currSector + " > * > .vis")
+      .selectAll("g")
+      .data(stackedData)
+      .join("g")
+        .attr("fill", (d) => {
+          console.log("KEY " + d.key);
+          if(greenMap.get(d.key) === "green" || d.key === "electric") {
+            console.log("GOTTEN!")
+            return colorMap.get(d.key)(0.2);
+          } else {
+            console.log(d.key);
+            return colorMap.get(d.key)(1);
+          }
+        })
+      .selectAll("rect")
+        .data(d=>d)
+        .join("rect")
+        .attr("x", d=>xScale(d.data[0]))
+        .attr("y", d=>yScale(d[1]))
+        .attr("height", function(d) { 
+          console.log(d);
+          console.log(yScale(d[0]) - yScale(d[1]));
+          return yScale(d[0]) - yScale(d[1]); })
+        .attr("width", xScale.bandwidth())
+  
+    // X-axis
+    d3.selectAll(".cell.sector-" + currSector + " > * > .vis")
+      .append("g")
+      .attr("transform", "translate(0, " + (currHeight - currMargin) + ")")
+      .call(d3.axisBottom(xScale).tickSizeOuter(0));
+  
+    // Y-axis
+    d3.selectAll(".cell.sector-" + currSector + " > * >.vis")
+      .append("g")
+      .attr("transform", "translate(" + currLeftMargin + ", 0)")
+      .call(d3.axisLeft(yScale).tickValues([0, maxTotal]));
+  }
+
+/* TODO REMOVE
   // TODO stacked bar chart
   // Layout number specifics
   let currMargin = 30;
@@ -584,6 +705,7 @@ function visualizeSectorData() {
     .append("g")
     .attr("transform", "translate(" + currMargin + ", 0)")
     .call(d3.axisLeft(yScale).tickValues([0, maxTotal]));
+    */
 }
 
 // -----------------------------------------------------
