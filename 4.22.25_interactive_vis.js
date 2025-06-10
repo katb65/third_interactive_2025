@@ -146,11 +146,11 @@ class SectorSubset {
     // TODO will CO2 be integrated here or be its own object?
 }
 
-// To store pieces of our electricity generation data in separate objects
+// To store pieces of our electricity generation or import data in separate objects
 // Its own mapping key is stored inside again since the object needs to be independently functional (like for treemap display)
 // (They need to be kept separate for user to be able to adjust what they define to be clean energy without us needing to refetch)
 // null for any generation means not present in EIA data (assumed 0)
-class ElecGenPiece {
+class ElectricityPiece {
   key; // ex. "wind"
   ids; // array of IDs to sum up vals of for this piece
   // TODO should I change this to mirror the above idToVal but just without the add/subtract ? for readability + future flexibility
@@ -226,19 +226,22 @@ sectorsCons.subsetsMap.set("transportation", new SectorSubset("transportation", 
                                                     null, null, null, null,
                                                     "CLACB", "NGASB", null, "PAACB")); // TODO CO2 "TC"
 
-// (subset key -> ElecGenPiece object)
-let elecGen = new Map();
+// (subset key -> ElectricityPiece object)
+let electricity = new Map();
 
-elecGen.set("wind", new ElecGenPiece("wind", ["WND"]));
-elecGen.set("solar", new ElecGenPiece("solar", ["SUN"])); // PV & thermal
-elecGen.set("geothermal", new ElecGenPiece("geothermal", ["GEO"]));
-elecGen.set("nuclear", new ElecGenPiece("nuclear", ["NUC"]));
-elecGen.set("hydroelectric", new ElecGenPiece("hydroelectric", ["HYC", "HPS"])); // Conventional and pumped storage
-elecGen.set("biomass", new ElecGenPiece("biomass", ["BIO"]));
+electricity.set("wind", new ElectricityPiece("wind", ["WND"]));
+electricity.set("solar", new ElectricityPiece("solar", ["SUN"])); // PV & thermal
+electricity.set("geothermal", new ElectricityPiece("geothermal", ["GEO"]));
+electricity.set("nuclear", new ElectricityPiece("nuclear", ["NUC"]));
+electricity.set("hydroelectric", new ElectricityPiece("hydroelectric", ["HYC", "HPS"])); // Conventional and pumped storage
+electricity.set("biomass", new ElectricityPiece("biomass", ["BIO"]));
 
-elecGen.set("coal", new ElecGenPiece("coal", ["COW"]));
-elecGen.set("natural gas", new ElecGenPiece("natural gas", ["NG"]));
-elecGen.set("other", new ElecGenPiece("other", ["PEL", "PC", "OOG", "OTH"]));
+electricity.set("coal", new ElectricityPiece("coal", ["COW"]));
+electricity.set("natural gas", new ElectricityPiece("natural gas", ["NG"]));
+electricity.set("other", new ElectricityPiece("other", ["PEL", "PC", "OOG", "OTH"]));
+
+// Separate, because it is pulled from a different section of the EIA site
+let elecImport = new ElectricityPiece("import", ["ELNIP", "ELISP"]);
 
 // Set of primary pieces considered green
 let greenSet = new Set(["wind", "solar", "hydroelectric", "geothermal"]);
@@ -258,19 +261,22 @@ let GWhorGW = "GWh";
 // Each piece will correspond to the same hue of color across sectors, but will be lighter shade if declared green by user than if not
 // Using 
 // TODO: add colorscales for pieces that some primary pieces will be subsplittable into (aviation?)
+// TODO: may be able to make curr color scheme something like reds/oranges, then others light shades of green (colorblindness... maybe smt else);
+// and any unelectrifiables can be shades of dark
+// what abt shades of light green vs shades of brown?
 let colorMap = new Map();
 
-colorMap.set("electric", d3.interpolateRgb("rgb(255, 255, 255)", d3.schemeTableau10[0]));
+colorMap.set("electric", {green: d3.schemePastel2[0], ngreen: null});
 
-colorMap.set("wind", d3.interpolateRgb("rgb(255, 255, 255)", d3.schemeTableau10[1]));
-colorMap.set("solar", d3.interpolateRgb("rgb(255, 255, 255)", d3.schemeTableau10[2]));
-colorMap.set("geothermal", d3.interpolateRgb("rgb(255, 255, 255)", d3.schemeTableau10[3]));
-colorMap.set("hydroelectric", d3.interpolateRgb("rgb(255, 255, 255)", d3.schemeTableau10[4]));
+colorMap.set("wind", {green: d3.schemePastel2[1], ngreen: null});
+colorMap.set("solar", {green: d3.schemePastel2[2], ngreen: null});
+colorMap.set("geothermal", {green: d3.schemePastel2[3], ngreen: d3.schemeCategory10[0]});
+colorMap.set("hydroelectric", {green: d3.schemePastel2[4], ngreen: d3.schemeCategory10[1]});
 
-colorMap.set("coal", d3.interpolateRgb("rgb(255, 255, 255)", d3.schemeTableau10[5]));
-colorMap.set("natural gas", d3.interpolateRgb("rgb(255, 255, 255)", d3.schemeTableau10[6]));
-colorMap.set("petroleum", d3.interpolateRgb("rgb(255, 255, 255)", d3.schemeTableau10[7]));
-colorMap.set("other", d3.interpolateRgb("rgb(255, 255, 255)", d3.schemeTableau10[8]));
+colorMap.set("coal", {green: null, ngreen: d3.schemeCategory10[2]});
+colorMap.set("natural gas", {green: null, ngreen: d3.schemeCategory10[3]});
+colorMap.set("petroleum", {green: null, ngreen: d3.schemeCategory10[4]});
+colorMap.set("other", {green: null, ngreen: d3.schemeCategory10[5]});
 
 // -----------------------------------------------------
 // ---HTML Element Adjustments: ---
@@ -292,6 +298,9 @@ d3.selectAll(".cell > * > .slider")
 d3.selectAll(".cell > .elec-efficiency")
   .on("change", (event) => updateElecEfficiency(event));
 
+d3.selectAll(".electricity > * > .generation-output")
+  .on("change", (event) => updateElectricity(event));
+
 // -----------------------------------------------------
 // ---On-Change Functions: ---
 // -----------------------------------------------------
@@ -308,8 +317,6 @@ async function updateState() {
   // TODO move into vis func
   d3.selectAll(".cell")
   .each(function(d,i) {
-      console.log("test");
-
       let currSectorBox = d3.select(this);
       let currSector = currSectorBox.attr("class").split(" ")
           .find((element) => /sector-/.test(element)).slice(7);
@@ -324,6 +331,7 @@ async function updateState() {
   });
 
   visualizeSectorData();
+  visualizeElectricityData();
 
   enableUserInput();
 }
@@ -340,8 +348,6 @@ async function updateYear() {
   // TODO move into vis func
   d3.selectAll(".cell")
   .each(function(d,i) {
-      console.log("test");
-
       let currSectorBox = d3.select(this);
       let currSector = currSectorBox.attr("class").split(" ")
           .find((element) => /sector-/.test(element)).slice(7);
@@ -356,6 +362,7 @@ async function updateYear() {
   });
 
   visualizeSectorData();
+  visualizeElectricityData();
 
   enableUserInput();
 }
@@ -409,6 +416,7 @@ function updateSectorSlider(event) {
 
     // Print/visualize event update based on the now stored data
     visualizeSectorData(currSector);
+    visualizeElectricityData();
 }
 
 // Called on user changing the electricity efficiency factor for some sector
@@ -426,8 +434,6 @@ function updateElecEfficiency(event) {
     let currSector = currSectorBox.attr("class").split(" ")
         .find((element) => /sector-/.test(element)).slice(7); // locate the class pertaining to the sector name & isolate it
 
-    console.log("elecEfficiency " + currValue); 
-
     let currSubset = sectorsCons.subsetsMap.get(currSector);
 
     // Store new efficiency + update electrification if needed
@@ -439,6 +445,32 @@ function updateElecEfficiency(event) {
 
     // Visualize event update
     visualizeSectorData(currSector);
+    visualizeElectricityData();
+}
+
+// Called on user changing some piece of electricity generation or import quantity for some sector
+function updateElectricity(event) {
+    // Get updated value
+    let currValue = parseFloat(d3.select(event.target).property("value"));
+
+    // Narrow down where event occurred
+    let currSectorBox = d3.select(event.target.parentNode);
+
+    let currElecGenType = currSectorBox.attr("class").split(" ")
+        .find((element) => /type-/.test(element)).slice(5); // locate the class pertaining to the piece name & isolate it
+
+    // Store new value
+    let currJSKey = currElecGenType.replace(/-+/, ' ')
+
+    if(currJSKey === "import") {
+      elecImport["adjustedVal"] = currValue;
+    } else {
+      let currElectricityPiece = electricity.get(currJSKey);
+      currElectricityPiece["adjustedVal"] = currValue;
+    }
+
+    // Visualize event update
+    visualizeElectricityData();
 }
 
 // -----------------------------------------------------
@@ -459,8 +491,6 @@ async function initialize() {
     // TODO move this to some other print/vis data func (as below)
     d3.selectAll(".cell")
         .each(function(d,i) {
-            console.log("test");
-
             let currSectorBox = d3.select(this);
             let currSector = currSectorBox.attr("class").split(" ")
                 .find((element) => /sector-/.test(element)).slice(7);
@@ -475,11 +505,7 @@ async function initialize() {
 
 
     visualizeSectorData();
-    /*
-
-    visualizeStateData();
-
-    */
+    visualizeElectricityData();
 
     enableUserInput();
 }
@@ -532,6 +558,7 @@ async function initializeYears() {
 }
 
 // Acquire per-sector fuel consumption info for current-set state and year and store in the SectorSubsets
+// Acquire per-fuel electricity generation info for current-set state and year and store in ElectricityPieces
 // NOTE: assumes user input is locked in the process; and does not unlock it (needs an outer layer function to do so)
 async function pullStoreData() {
     // pull entire API call at once per EIA browser type, then go through values and sift them into the corresponding object spaces
@@ -540,10 +567,22 @@ async function pullStoreData() {
     // query for query strings & await Promise resolution
     let allFullsEnergyPromise = d3.json(composeQueryString("energy", "value", state, (year-1), (year+1)));
     //let allFullsCO2Promise = d3.json(composeQueryString("CO2", "value", state, (year-1), (year+1)));
+    let allFullsElectricityPromise = d3.json(composeQueryString("electricity", "generation", state, (year-1), (year+1)))
+    let allFullsImportPromise = d3.json(composeQueryString("import", "value", state, (year-1), (year+1)));
+    
     let allFullsEnergy = await allFullsEnergyPromise;
     //let allFullsCO2 = await allFullsCO2Promise;
+    let allFullsElectricity = await allFullsElectricityPromise;
+    let allFullsImport = await allFullsImportPromise;
+
+    console.log(allFullsImport);
+    
   
-    storeSectorData(allFullsEnergy); // TODO later pass allFullsCO2 to store also - and presumably electricity breakdown as well
+    storeSectorData(allFullsEnergy); // TODO later pass allFullsCO2 to store also
+    storeElectricityData(allFullsElectricity, allFullsImport);
+
+    // TODO imports of elec? will need to remark on limitation of getting the env. impacts of this as well (CO2 pull is very limited)
+  
   
     //checkTotalParts();
 }
@@ -623,11 +662,10 @@ function visualizeSectorData(currSector = null) {
       .data(stackedData)
       .join("g")
         .attr("fill", (d) => {
-          console.log("KEY " + d.key);
           if(greenSet.has(d.key) || d.key === "electric") {
-            return colorMap.get(d.key)(0.1);
+            return colorMap.get(d.key)["green"];
           } else {
-            return colorMap.get(d.key)(1);
+            return colorMap.get(d.key)["ngreen"];
           }
         })
       .selectAll("rect")
@@ -636,8 +674,6 @@ function visualizeSectorData(currSector = null) {
         .attr("x", d=>xScale(d.data[0]))
         .attr("y", d=>yScale(d[1]))
         .attr("height", function(d) { 
-          console.log(d);
-          console.log(yScale(d[0]) - yScale(d[1]));
           return yScale(d[0]) - yScale(d[1]); })
         .attr("width", xScale.bandwidth())
   
@@ -718,6 +754,44 @@ function visualizeSectorData(currSector = null) {
     */
 }
 
+// Visualize & print relevant text for the electricity generation & import data contained at the bottom
+function visualizeElectricityData() {
+  // TODO print stored values (from pull or input) as text
+  // + visualize as treemap (colors? same as other? brown vs green? cross-mapping upon switch? ...)
+  // pastel1 vs dark2?
+  // also align the groups that elec gen vs primaries are defined by (see: issue with other/biomass/petroleum) after this works
+  // need to figure out gen vs use issue...
+
+  let electricityBox = d3.select(".electricity");
+
+  // Calculate & display difference between available and needed electricity
+  let currDemand = 0;
+  for(let currSubset of sectorsCons.subsetsMap.values()) {
+    currDemand += currSubset.subSubsets.get("electric")["adjustedVal"];
+  }
+  for(let currElectricityPiece of electricity.values()) {
+    currDemand -= currElectricityPiece["adjustedVal"];
+  }
+  currDemand -= elecImport["adjustedVal"];
+
+  if(currDemand > 0) {
+    electricityBox.select(".demand-output").text("Demand remaining to fill: " + formatCommas(currDemand) + " GWh");
+  } else {
+    electricityBox.select(".demand-output").text("Over demand by: " + formatCommas(-currDemand) + " GWh");
+  }
+
+  // Electricity generation
+  for(let currElectricityPiece of electricity.values()) {
+    let currHTMLKey = currElectricityPiece.key.replace(/\s+/, '-');
+    let currPieceBox = electricityBox.select(".input-container.type-" + currHTMLKey);
+    currPieceBox.select(".generation-output").property("value", currElectricityPiece["adjustedVal"]); // TODO comma format? would need to be a text box & get parsed if so
+  }
+
+  // Imports
+  let importBox = electricityBox.select(".input-container.type-import");
+  importBox.select(".generation-output").property("value", elecImport["adjustedVal"]);
+}
+
 // -----------------------------------------------------
 // ---Helper Functions: ---
 // -----------------------------------------------------
@@ -765,7 +839,8 @@ function enableUserInput() {
 // For updateSectorSlider(), updateElecEfficiency()
 // Calculates & store the current adjustedVals for the subSubsets & primary pieces of passed in sector based on the current
 // adjustedDemand and adjustedElectrification
-// TODO: if adjusted values are close to 0 it should probably just make them 0... (as in, things like 1e-11 or something, rounding errors)
+// TODO: if adjusted values are close to 0 it should probably just make them 0... (as in, things like 1e-11 or something, rounding errors) - espc
+// because some are below 0, which errors out the visualizer
 function calculateStoreAdjustedVals(currSubset) {
     // from base val & electrification, we first scale the val by demand percent, then shift pieces to fit the electrification percent
     let scaledPrimary = (currSubset.subSubsets.get("primary")["baseVal"] * (currSubset["adjustedDemand"] / 100));
@@ -778,8 +853,6 @@ function calculateStoreAdjustedVals(currSubset) {
 
     let toMove = ((currSubset["adjustedElectrification"] / 100) * (scaledPrimary + scaledElectric) - scaledElectric) / 
       (currSubset["elecEfficiency"] - (currSubset["adjustedElectrification"] / 100)*currSubset["elecEfficiency"] + (currSubset["adjustedElectrification"] / 100));
-
-    console.log("MOVE " + toMove);
 
     currSubset.subSubsets.get("primary")["adjustedVal"] = scaledPrimary - toMove;
     currSubset.subSubsets.get("electric")["adjustedVal"] = scaledElectric + (toMove * currSubset["elecEfficiency"]);
@@ -809,8 +882,6 @@ function calculateStoreAdjustedVals(currSubset) {
         currPrimaryPiece["adjustedVal"] = (currPrimaryPiece["baseVal"]) * (currSubset["adjustedDemand"] / 100)
           - (toMove * (currPrimaryPiece["baseVal"]/(currSubset.subSubsets.get("primary")["baseVal"] - greenSumBase)));
       }
-
-      console.log("ADJUSTED " + currPrimaryPiece["adjustedVal"]);
     }
 
     /* TODO remove old calculation not considering green vs ngreen
@@ -834,15 +905,15 @@ function calculateStoreAdjustedVals(currSubset) {
 }
 
 // For initializeYears(), pullStoreData()
-// queryType: "energy", "CO2", or "electricity"
-// Composes an EIA energy, CO2, or electricity data query string with optional query, stateId, start, and end dates, 
+// queryType: "energy", "CO2", "electricity", or "import"
+// Composes an EIA energy, CO2, electricity, or electricity import data query string with optional query, stateId, start, and end dates, 
 // with current EIA API key and instructions to return annually & sort returned data by date in descending order
 // (primary pieces are skipped in case of null query - used for year initialization)
 // TODO: make this compose for elec subparts (vis 1 stuff) as well
 function composeQueryString(queryType, query, stateId, start, end) {
     let allQueryString = "";
   
-    if(queryType === "energy") {
+    if(queryType === "energy" || queryType === "import") {
       allQueryString = "https://api.eia.gov/v2/seds/data/?";
     } else if(queryType === "CO2") {
       allQueryString = "https://api.eia.gov/v2/co2-emissions/co2-emissions-aggregates/data/?";
@@ -859,7 +930,11 @@ function composeQueryString(queryType, query, stateId, start, end) {
       allQueryString += ("&data[0]=" + query);
     }
     if(stateId !== null) {
-      allQueryString += ("&facets[stateId][]=" + stateId);
+      if(queryType === "electricity") {
+        allQueryString += ("&facets[location][]=" + stateId);
+      } else {
+        allQueryString += ("&facets[stateId][]=" + stateId);
+      }
     }
     if(start !== null) {
       allQueryString += ("&start=" + start);
@@ -897,11 +972,16 @@ function composeQueryString(queryType, query, stateId, start, end) {
         allQueryString += ("&facets[fuelId][]=" + sectorsCons.idNatGasCO2);
         allQueryString += ("&facets[fuelId][]=" + sectorsCons.idPetroleumCO2);
       }
-    } else if(queryType === "electricity") { // TODO add the sector id = 98 thing from vis 1?
-      for(let currElecGenPiece of elecGen.values()) {
-        for(let currID of currElecGenPiece.ids) {
+    } else if(queryType === "electricity") { 
+      for(let currElectricityPiece of electricity.values()) {
+        for(let currID of currElectricityPiece["ids"]) {
           allQueryString += ("&facets[fueltypeid][]=" + currID);
         }
+      }
+      allQueryString += ("&facets[sectorid][]=98");
+    } else if(queryType === "import") {
+      for(let currID of elecImport["ids"]) {
+        allQueryString += ("&facets[seriesId][]=" + currID);
       }
     } else {
       throw new Error("Unexpected value in queryType: " + queryType);
@@ -939,33 +1019,32 @@ function storeSectorData(allFullsEnergy) {
   
     // isolate the requested values from the energy response & store them in the right spots
     for(let currFullEnergy of allFullsEnergy.response.data) {
-      if(parseInt(currFullEnergy.period) != year) {
+      if(parseInt(currFullEnergy["period"]) !== year) {
         continue; // we fetched several years near current year due to variable API mechanics, so cycle past irrelevant ones
       }
   
-      if(currFullEnergy.unit !== "Billion Btu" || currFullEnergy.stateId !== state) { // year & series ID already checked above or below
+      if(currFullEnergy["unit"] !== "Billion Btu" || currFullEnergy["stateId"] !== state) { // year & series ID already checked above or below
         throw new Error("Unexpected unit or state ID mismatch in pulled API data with " + currFullEnergy);
       }
   
       let postConvert;
-      if(isNaN(parseFloat(currFullEnergy.value))) {
+      if(isNaN(parseFloat(currFullEnergy["value"]))) {
         postConvert = 0;
       } else {
         // convert response val from Billion Btu to GWh
-        let preConvert = parseFloat(currFullEnergy.value);
+        let preConvert = parseFloat(currFullEnergy["value"]);
         postConvert = preConvert * (1/3.412);
-        console.log(postConvert);
       }
   
       for(let currSubset of sectorsCons.subsetsMap.values()) {
         for(let currSubSubset of currSubset.subSubsets.values()) {
-          if(currSubSubset.idEnergy === currFullEnergy.seriesId) {
+          if(currSubSubset["idEnergy"] === currFullEnergy["seriesId"]) {
             // store converted val in currSubSubset
             currSubSubset["baseVal"] = postConvert;
-          } else if(currSubSubset.key === "primary") { // or it might be an ID for one of the primary pieces
+          } else if(currSubSubset["key"] === "primary") { // or it might be an ID for one of the primary pieces
             for(let currPrimaryPiece of currSubSubset.primaryPieces.values()) {
               for(let currID of currPrimaryPiece.idToVal.keys()) {
-                if(currID === currFullEnergy.seriesId) {
+                if(currID === currFullEnergy["seriesId"]) {
                   currPrimaryPiece.idToVal.get(currID)["baseVal"] = postConvert;
                 }
               }
@@ -1062,14 +1141,14 @@ function storeSectorData(allFullsEnergy) {
       for(let currPrimaryPiece of currPrimary.primaryPieces.values()) {
         // baseVal was set to 0 at start of function
         for(let currVal of currPrimaryPiece.idToVal.values()) {
-          if(currVal.add) { 
+          if(currVal["add"]) { 
             currPrimaryPiece["baseVal"] += currVal["baseVal"];
           } else {
             currPrimaryPiece["baseVal"] -= currVal["baseVal"];
           }
         }
   
-        if(currPrimaryPiece.key !== "other") {
+        if(currPrimaryPiece["key"] !== "other") {
           currPrimary.primaryPieces.get("other")["baseVal"] -= currPrimaryPiece["baseVal"];
         }
 
@@ -1087,51 +1166,80 @@ function storeSectorData(allFullsEnergy) {
 
 // For pullStoreData()
 // Dissects & stores EIA API response data for in the electricity generation values map for the current-set year & state
+// as well as storing the electricity import value
 // If no data for some value, assumes it 0
-function storeElecGenData(allFullsElecGen) {  
+// Some of these end up negative, but it's because in the pulled data itself, they are negative
+function storeElectricityData(allFullsElecGen, allFullsImport) {  
   console.log(allFullsElecGen);
 
   // Set all vals as 0 to avoid leftover prior values in case of data gaps
-  for(let currElecGenPiece of elecGen.values()) {
-    currElecGenPiece["baseVal"] = 0;
-    currElecGenPiece["adjustedVal"] = 0;
+  for(let currElectricityPiece of electricity.values()) {
+    currElectricityPiece["baseVal"] = 0;
+    currElectricityPiece["adjustedVal"] = 0;
   }
+  elecImport["baseVal"] = 0;
+  elecImport["adjustedVal"] = 0;
   
   // Isolate pulled pieces + store
   for(let currFullElecGen of allFullsElecGen.response.data) {
-    if(parseInt(currFullElecGen.period) != year) {
+    if(parseInt(currFullElecGen["period"]) !== year) {
       continue; // we fetched several years near current year due to variable API mechanics, so cycle past irrelevant ones
     }
 
-    // TODO what is the unit for elec gen
-    if(currFullElecGen.unit !== "Billion Btu" || currFullEnergy.stateId !== state) { // year & series ID already checked above or below
+    if(currFullElecGen["generation-units"] !== "thousand megawatthours" || currFullElecGen["location"] !== state) { // year & series ID already checked above or below
       throw new Error("Unexpected unit or state ID mismatch in pulled API data with " + currFullElecGen);
     }
 
     let postConvert;
-    if(isNaN(parseFloat(currFullElecGen.value))) {
+    if(isNaN(parseFloat(currFullElecGen["generation"]))) {
       postConvert = 0;
     } else {
-      // TODO unit/conversion
-      // convert response val from ??? to GWh
-      let preConvert = parseFloat(currFullElecGen.value);
-      postConvert = preConvert * (1/3.412);
-      console.log(postConvert);
+      postConvert = parseFloat(currFullElecGen["generation"]);
     }
 
-    for(let currElecGenPiece of elecGen.values()) {
-      for(let currElecGenID of currElecGenPiece.ids) {
-        if(currElecGenID === currFullEnergy.fueltypeid) { // TODO is this right
-          currElecGenPiece["baseVal"] += postConvert;
+    for(let currElectricityPiece of electricity.values()) {
+      for(let currElecGenID of currElectricityPiece["ids"]) {
+        if(currElecGenID === currFullElecGen["fueltypeid"]) { 
+          currElectricityPiece["baseVal"] += postConvert;
         }
       }
     }
   }
 
-  // Set adjusted vals to start at base
-  for(let currElecGenPiece of elecGen.values()) {
-    currElecGenPiece["adjustedVal"] = currElecGenPiece["baseVal"];
+  for(let currFullImport of allFullsImport.response.data) {
+    if(parseInt(currFullImport["period"]) !== year) {
+      continue; // we fetched several years near current year due to variable API mechanics, so cycle past irrelevant ones
+    }
+
+    if(currFullImport["unit"] !== "Million kilowatthours" || currFullImport["stateId"] !== state) { // year & series ID already checked above or below
+      throw new Error("Unexpected unit or state ID mismatch in pulled API data with " + currFullEnergy);
+    }
+
+    let postConvert;
+    if(isNaN(parseFloat(currFullImport["value"]))) {
+      postConvert = 0;
+    } else {
+      postConvert = parseFloat(currFullImport["value"]);
+    }
+
+    for(let currImportID of elecImport["ids"]) {
+      if(currImportID === currFullImport["seriesId"]) { 
+        elecImport["baseVal"] += postConvert;
+      }
+    }
   }
+
+  // Set adjusted vals to start at base
+  for(let currElectricityPiece of electricity.values()) {
+    currElectricityPiece["adjustedVal"] = currElectricityPiece["baseVal"];
+  }
+  elecImport["adjustedVal"] = elecImport["baseVal"];
+
+  console.log("elec gen pieces");
+  for(let currElectricityPiece of electricity.values()) {
+    console.log(currElectricityPiece["key"] + " " + currElectricityPiece["baseVal"]);
+  }
+  console.log("import " + elecImport["adjustedVal"]);
 }
 
 // For updateSectorSlider(), updateElecEfficiency()
@@ -1164,8 +1272,7 @@ function preventGreenElectrification(currSector) {
 
       let currSectorBox = d3.select(".cell.sector-" + currSector);
       currSectorBox.select(".type-electrification > .slider").property("value", maxElectrification);
-      console.log("MAX " + maxElectrification);
-      currSectorBox.select(".type-electrification > .slider-output").text(maxElectrification.toFixed(2) + "%"); // TODO round this, only in output, not in storage
+      currSectorBox.select(".type-electrification > .slider-output").text(maxElectrification.toFixed(2) + "%"); 
     }
 }
 

@@ -30,14 +30,13 @@
     <br/>
     <div class="grid">
         <div class="cell sector-industrial">
-            <p> Industrial </p>
-            <p class = "test-text"></p>
+            <p class = "subheader"> Industrial </p>
             <div class = "vis-container">
                 <svg class = "vis"></svg>
             </div>
             <!-- TODO move this into a hidden blurb -->
             <input class = "elec-efficiency" type="number" min="0" step="any"></input>
-            <div class="slide-container type-demand">
+            <div class="input-container type-demand">
                 <!-- TODO add text input box for precision? will need to filter out non numeric input + trigger slider event -->
                 <!-- TODO blurbs saying demand % inc's efffactor (by amt of things using it) whereas electrification % doesn't (by GWh)-->
                 <!-- TODO try converting to a D3 slider, this one locks up sometimes -->
@@ -46,7 +45,7 @@
                 <p> 500% &nbsp;&nbsp;&nbsp; </p>
                 <p class = "slider-output"> 100% </p>
             </div>
-            <div class="slide-container type-electrification">
+            <div class="input-container type-electrification">
                 <p> 0% </p>
                 <input class = "slider"  type="range" min = "0" max = "100" value = "0" step = "0.1" disabled></input>
                 <p> 100% &nbsp;&nbsp;&nbsp; </p>
@@ -54,19 +53,18 @@
             </div>
         </div>
         <div class="cell sector-transportation">
-            <p> Transportation </p>
-            <p class = "test-text"></p>
+            <p class = "subheader"> Transportation </p>
             <div class = "vis-container">
                 <svg class = "vis"></svg>
             </div>
             <input class = "elec-efficiency" type="number" min="0" step="any"></input>
-            <div class="slide-container type-demand">
+            <div class="input-container type-demand">
                 <p> 0% </p>
                 <input class = "slider"  type="range" min = "0" max = "500" value = "100" step = "1" disabled></input>
                 <p> 500% &nbsp;&nbsp;&nbsp; </p>
                 <p class = "slider-output"> 100% </p>
             </div>
-            <div class="slide-container type-electrification">
+            <div class="input-container type-electrification">
                 <p> 0% </p>
                 <input class = "slider" type="range" min = "0" max = "100" value = "0" step = "1" disabled></input>
                 <p> 100% &nbsp;&nbsp;&nbsp; </p>
@@ -74,19 +72,18 @@
             </div>
         </div>
         <div class="cell sector-commercial">
-            <p> Commercial </p>
-            <p class = "test-text"></p>
+            <p class = "subheader"> Commercial </p>
             <div class = "vis-container">
                 <svg class = "vis"></svg>
             </div>
             <input class = "elec-efficiency" type="number" min="0" step="any"></input>
-            <div class="slide-container type-demand">
+            <div class="input-container type-demand">
                 <p> 0% </p>
                 <input class = "slider" type="range" min = "0" max = "500" value = "100" step = "1" disabled></input>
                 <p> 500% &nbsp;&nbsp;&nbsp; </p>
                 <p class = "slider-output"> 100% </p>
             </div>
-            <div class="slide-container type-electrification">
+            <div class="input-container type-electrification">
                 <p> 0% </p>
                 <input class = "slider" type="range" min = "0" max = "100" value = "0" step = "1" disabled></input>
                 <p> 100% &nbsp;&nbsp;&nbsp; </p>
@@ -94,24 +91,81 @@
             </div>
         </div>
         <div class="cell sector-residential">
-            <p> Residential </p>
-            <p class = "test-text"></p>
+            <p class = "subheader"> Residential </p>
             <div class = "vis-container">
                 <svg class = "vis"></svg>
             </div>
             <input class = "elec-efficiency" type="number" min="0" step="any"></input>
-            <div class="slide-container type-demand">
+            <div class="input-container type-demand">
                 <p> 0% </p>
                 <input class = "slider" type="range" min = "0" max = "500" value = "100" step = "1" disabled></input>
                 <p> 500% &nbsp;&nbsp;&nbsp; </p>
                 <p class = "slider-output"> 100% </p>
             </div>
-            <div class="slide-container type-electrification">
+            <div class="input-container type-electrification">
                 <p> 0% </p>
                 <input class = "slider" type="range" min = "0" max = "100" value = "0" step = "1" disabled></input>
                 <p> 100% &nbsp;&nbsp;&nbsp; </p>
                 <p class = "slider-output"> </p>
             </div>
+        </div>
+    </div>
+    <div class="electricity">
+        <p> Electricity Generation </p>
+        <p class = "demand-output"></p>
+        <br/>
+        <!-- TODO green or not checkboxes here ? or in dropdown? or checkbox that shows them here? -->
+        <div class="input-container type-wind">
+            <!-- TODO add input boxes to each -->
+            <p class = "subheader"> Wind: </p>
+            <input class = "generation-output" type="number" min="0" step="any"></input>
+            <p class = "units"> GWh </p>
+        </div>
+        <div class="input-container type-solar">
+            <p class = "subheader"> Solar: </p>
+            <input class = "generation-output" type="number" min="0" step="any"></input>
+            <p class = "units"> GWh </p>
+        </div>
+        <div class="input-container type-geothermal">
+            <p class = "subheader"> Geothermal: </p>
+            <input class = "generation-output" type="number" min="0" step="any"></input>
+            <p class = "units"> GWh </p>
+        </div>
+        <div class="input-container type-nuclear">
+            <p class = "subheader"> Nuclear: </p>
+            <input class = "generation-output" type="number" min="0" step="any"></input>
+            <p class = "units"> GWh </p>
+        </div>
+        <div class="input-container type-hydroelectric">
+            <p class = "subheader"> Hydroelectric: </p>
+            <input class = "generation-output" type="number" min="0" step="any"></input>
+            <p class = "units"> GWh </p>
+        </div>
+        <div class="input-container type-biomass">
+            <p class = "subheader"> Biomass: </p>
+            <input class = "generation-output" type="number" min="0" step="any"></input>
+            <p class = "units"> GWh </p>
+        </div>
+        <div class="input-container type-coal">
+            <p class = "subheader"> Coal: </p>
+            <input class = "generation-output" type="number" min="0" step="any"></input>
+            <p class = "units"> GWh </p>
+        </div>
+        <div class="input-container type-natural-gas">
+            <p class = "subheader"> Natural Gas: </p>
+            <input class = "generation-output" type="number" min="0" step="any"></input>
+            <p class = "units"> GWh </p>
+        </div>
+        <div class="input-container type-other">
+            <p class = "subheader"> Other: </p>
+            <input class = "generation-output" type="number" min="0" step="any"></input>
+            <p class = "units"> GWh </p>
+        </div>
+        <br/>
+        <div class="input-container type-import">
+            <p class = "subheader"> Import: </p>
+            <input class = "generation-output" type="number" min="0" step="any"></input>
+            <p class = "units"> GWh </p>
         </div>
     </div>
 
