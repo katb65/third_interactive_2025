@@ -299,7 +299,7 @@ d3.selectAll(".cell > .input-container.type-demand,.input-container.type-electri
 // TODO why is this not working for demand...
   .on("change", (event) => updateSectorSlider(event));
 
-d3.selectAll(".cell > * > .type-elec-efficiency > .slider")
+d3.selectAll(".cell > .type-elec-efficiency > .slider")
   .on("change", (event) => updateElecEfficiency(event)); // TODO rewire elec efficiency to be formatted as the transmission efficiency is
 
 d3.selectAll(".electricity > * > .elec-piece-input")
@@ -396,12 +396,7 @@ function updateElecEfficiency(event) {
     // Get updated value
     let currValue = parseFloat(d3.select(event.target).property("value"));
 
-    if(currValue < 0) {
-      throw new Error("Invalid electric efficiency " + currValue + ", ignoring");
-    }
-
     // Narrow down where event occurred
-    let currSliderBox = d3.select(event.target.parentNode);
     let currSectorBox = d3.select(event.target.parentNode.parentNode);
 
     let currSector = currSectorBox.attr("class").split(" ")
@@ -587,7 +582,7 @@ function visualizeSectorData(currSector = null) {
     let currSectorBox = d3.select(".cell.sector-" + currSector);
 
     currSectorBox.select(".type-elec-efficiency > .slider").property("value", currSectorObj["elecEfficiency"]);
-    currSectorBox.select(".type-elec-efficiency > .slider-output").text(currSectorObj["elecEfficiency"]);
+    currSectorBox.select(".type-elec-efficiency > .slider-output").text(formatCommas(currSectorObj["elecEfficiency"]));
 
     currSectorBox.select(".type-demand > .slider").property("value", currSectorObj["adjustedDemand"]);
     currSectorBox.select(".type-demand > .slider-output").text(formatCommas(currSectorObj["adjustedDemand"]) + "%");
