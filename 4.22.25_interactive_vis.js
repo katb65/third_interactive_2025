@@ -243,6 +243,9 @@ electricity.set("other", new ElectricityPiece("other", ["PEL", "PC", "OOG", "OTH
 // Separate, because it is pulled from a different section of the EIA site
 let elecImport = new ElectricityPiece("import", ["ELNIP", "ELISP"]);
 
+// Transmission efficiency (how much of electricity generated is able to be used after losses)
+let transmissionEfficiency = null;
+
 // Set of primary pieces considered green
 let greenSet = new Set(["wind", "solar", "hydroelectric", "geothermal"]);
 
@@ -292,14 +295,18 @@ d3.select("#year-select-drop")
 d3.select("#GWh-or-GW-drop")
   .on("change", updateGWhorGW);
 
-d3.selectAll(".cell > * > .slider")
+d3.selectAll(".cell > .input-container.type-demand,.input-container.type-electrification > .slider")
+// TODO why is this not working for demand...
   .on("change", (event) => updateSectorSlider(event));
 
-d3.selectAll(".cell > .elec-efficiency")
-  .on("change", (event) => updateElecEfficiency(event));
+d3.selectAll(".cell > * > .type-elec-efficiency > .slider")
+  .on("change", (event) => updateElecEfficiency(event)); // TODO rewire elec efficiency to be formatted as the transmission efficiency is
 
-d3.selectAll(".electricity > * > .generation-output")
+d3.selectAll(".electricity > * > .elec-piece-input")
   .on("change", (event) => updateElectricity(event));
+
+d3.select(".electricity > .input-container.type-transmission-efficiency > .slider")
+  .on("change", (event) => updateTransEff(event));
 
 // -----------------------------------------------------
 // ---On-Change Functions: ---
@@ -313,22 +320,6 @@ async function updateState() {
   disableUserInput();
 
   await pullStoreData();
-
-  // TODO move into vis func
-  d3.selectAll(".cell")
-  .each(function(d,i) {
-      let currSectorBox = d3.select(this);
-      let currSector = currSectorBox.attr("class").split(" ")
-          .find((element) => /sector-/.test(element)).slice(7);
-
-      currSectorBox.select(".type-demand > .slider").property("value", 100);
-      currSectorBox.select(".type-demand > .slider-output").text("100%");
-
-      let currAdjustedElectrification = sectorsCons.subsetsMap.get(currSector)["adjustedElectrification"];
-
-      currSectorBox.select(".type-electrification > .slider").property("value", currAdjustedElectrification);
-      currSectorBox.select(".type-electrification > .slider-output").text(currAdjustedElectrification.toFixed(2) + "%");
-  });
 
   visualizeSectorData();
   visualizeElectricityData();
@@ -344,22 +335,6 @@ async function updateYear() {
   disableUserInput();
 
   await pullStoreData();
-
-  // TODO move into vis func
-  d3.selectAll(".cell")
-  .each(function(d,i) {
-      let currSectorBox = d3.select(this);
-      let currSector = currSectorBox.attr("class").split(" ")
-          .find((element) => /sector-/.test(element)).slice(7);
-
-      currSectorBox.select(".type-demand > .slider").property("value", 100);
-      currSectorBox.select(".type-demand > .slider-output").text("100%");
-
-      let currAdjustedElectrification = sectorsCons.subsetsMap.get(currSector)["adjustedElectrification"];
-
-      currSectorBox.select(".type-electrification > .slider").property("value", currAdjustedElectrification);
-      currSectorBox.select(".type-electrification > .slider-output").text(currAdjustedElectrification.toFixed(2) + "%");
-  });
 
   visualizeSectorData();
   visualizeElectricityData();
@@ -379,7 +354,6 @@ function updateGWhorGW() {
 
 // Called on user sliding a demand or electrification % slider within a sector box, changes & reprints corresponding internal data
 function updateSectorSlider(event) {
-  
     // Get updated value
     let currValue = parseFloat(d3.select(event.target).property("value"));
 
@@ -395,15 +369,13 @@ function updateSectorSlider(event) {
     console.log(currSector);
     console.log(currType);
 
-    // Reflect adjustment in print
-    currSliderBox.select(".slider-output").text(currValue.toFixed(2) + "%");
-
-    // Store data + adjust electrification and its print if needed
+    // Store data + adjust electrification if needed
     let currSubset = sectorsCons.subsetsMap.get(currSector);
 
     if(currType === "electrification") {
       currSubset["adjustedElectrification"] = currValue;
       preventGreenElectrification(currSector);
+      currValue = currSubset["adjustedElectrification"];
     } else if(currType === "demand") {
       currSubset["adjustedDemand"] = currValue;
     } else {
@@ -429,7 +401,8 @@ function updateElecEfficiency(event) {
     }
 
     // Narrow down where event occurred
-    let currSectorBox = d3.select(event.target.parentNode);
+    let currSliderBox = d3.select(event.target.parentNode);
+    let currSectorBox = d3.select(event.target.parentNode.parentNode);
 
     let currSector = currSectorBox.attr("class").split(" ")
         .find((element) => /sector-/.test(element)).slice(7); // locate the class pertaining to the sector name & isolate it
@@ -437,7 +410,7 @@ function updateElecEfficiency(event) {
     let currSubset = sectorsCons.subsetsMap.get(currSector);
 
     // Store new efficiency + update electrification if needed
-    currSubset.elecEfficiency = currValue;
+    currSubset["elecEfficiency"] = currValue;
     preventGreenElectrification(currSector);
 
     // Update data to reflect it
@@ -448,16 +421,16 @@ function updateElecEfficiency(event) {
     visualizeElectricityData();
 }
 
-// Called on user changing some piece of electricity generation or import quantity for some sector
+// Called on user changing some piece of electricity generation or import quantity
 function updateElectricity(event) {
     // Get updated value
     let currValue = parseFloat(d3.select(event.target).property("value"));
 
     // Narrow down where event occurred
-    let currSectorBox = d3.select(event.target.parentNode);
+    let currPieceBox = d3.select(event.target.parentNode);
 
-    let currElecGenType = currSectorBox.attr("class").split(" ")
-        .find((element) => /type-/.test(element)).slice(5); // locate the class pertaining to the piece name & isolate it
+    let currElecGenType = currPieceBox.attr("class").split(" ")
+        .find((element) => /type-piece-/.test(element)).slice(11); // locate the class pertaining to the piece name & isolate it
 
     // Store new value
     let currJSKey = currElecGenType.replace(/-+/, ' ')
@@ -468,6 +441,18 @@ function updateElectricity(event) {
       let currElectricityPiece = electricity.get(currJSKey);
       currElectricityPiece["adjustedVal"] = currValue;
     }
+
+    // Visualize event update
+    visualizeElectricityData();
+}
+
+// Called on user changing electricity transmission efficiency
+function updateTransEff(event) {
+    // Get updated value
+    let currValue = parseFloat(d3.select(event.target).property("value"));
+
+    // Store new value
+    transmissionEfficiency = currValue;
 
     // Visualize event update
     visualizeElectricityData();
@@ -558,7 +543,7 @@ async function initializeYears() {
 }
 
 // Acquire per-sector fuel consumption info for current-set state and year and store in the SectorSubsets
-// Acquire per-fuel electricity generation info for current-set state and year and store in ElectricityPieces
+// Acquire per-fuel electricity generation & imports info for current-set state and year and store in ElectricityPieces
 // NOTE: assumes user input is locked in the process; and does not unlock it (needs an outer layer function to do so)
 async function pullStoreData() {
     // pull entire API call at once per EIA browser type, then go through values and sift them into the corresponding object spaces
@@ -595,14 +580,26 @@ function visualizeSectorData(currSector = null) {
       visualizeSectorData(currKey);
     }
   } else {
+    let currSectorObj = sectorsCons.subsetsMap.get(currSector);
+    let currPrimaryPieces = currSectorObj.subSubsets.get("primary").primaryPieces;
+
+    // Print relevant slider values & outputs
+    let currSectorBox = d3.select(".cell.sector-" + currSector);
+
+    currSectorBox.select(".type-elec-efficiency > .slider").property("value", currSectorObj["elecEfficiency"]);
+    currSectorBox.select(".type-elec-efficiency > .slider-output").text(currSectorObj["elecEfficiency"]);
+
+    currSectorBox.select(".type-demand > .slider").property("value", currSectorObj["adjustedDemand"]);
+    currSectorBox.select(".type-demand > .slider-output").text(formatCommas(currSectorObj["adjustedDemand"]) + "%");
+
+    currSectorBox.select(".type-electrification > .slider").property("value", currSectorObj["adjustedElectrification"]);
+    currSectorBox.select(".type-electrification > .slider-output").text(formatCommas(currSectorObj["adjustedElectrification"]) + "%");
+
     // Layout number specifics
     let currMargin = 20;
     let currLeftMargin = 60;
     let currHeight = parseInt(d3.select(".cell > * > .vis").style("height").slice(0, -2));
     let currWidth = parseInt(d3.select(".cell > * > .vis").style("width").slice(0, -2));
-
-    let currSectorObj = sectorsCons.subsetsMap.get(currSector);
-    let currPrimaryPieces = currSectorObj.subSubsets.get("primary").primaryPieces;
 
     // Create object usable by the vis
     let currData = [];
@@ -653,14 +650,12 @@ function visualizeSectorData(currSector = null) {
       .padding(0.1);
   
     console.log(stackedData);
-
-    // TODO why does green not render! oh maybe just for 2010..?
   
     // Bars
-    d3.select(".cell.sector-" + currSector + " > * > .vis")
+    currSectorBox.select(".vis")
       .selectAll("g")
       .data(stackedData)
-      .join("g")
+      .join("g") // this also cleans out prior iterations' axes
         .attr("fill", (d) => {
           if(greenSet.has(d.key) || d.key === "electric") {
             return colorMap.get(d.key)["green"];
@@ -678,118 +673,58 @@ function visualizeSectorData(currSector = null) {
         .attr("width", xScale.bandwidth())
   
     // X-axis
-    d3.selectAll(".cell.sector-" + currSector + " > * > .vis")
+    currSectorBox.select(".vis")
       .append("g")
       .attr("transform", "translate(0, " + (currHeight - currMargin) + ")")
       .call(d3.axisBottom(xScale).tickSizeOuter(0));
   
     // Y-axis
-    d3.selectAll(".cell.sector-" + currSector + " > * >.vis")
+    currSectorBox.select(".vis")
       .append("g")
       .attr("transform", "translate(" + currLeftMargin + ", 0)")
       .call(d3.axisLeft(yScale).tickValues([0, maxTotal]));
   }
-
-/* TODO REMOVE
-  // TODO stacked bar chart
-  // Layout number specifics
-  let currMargin = 30;
-  let currHeight = parseInt(d3.select(".cell > * > .vis").style("height").slice(0, -2));
-  let currWidth = parseInt(d3.select(".cell > * > .vis").style("width").slice(0, -2));
-
-  let groups = ["solar", "wind"]; // TODO storage system up in display vars where each of these maps to their respective pieces
-  let tempData = [{stack: "first", group: "solar", val: 1}, {stack: "second", group: "solar", val: 2}, 
-    {stack: "first", group: "wind", val: 3}, {stack: "second", group: "wind", val: 4}];
-
-  console.log(d3.index(tempData, d=>d.stack, d=>d.group));
-
-  let stackedData = d3.stack()
-    .keys(groups)
-    .value(([, d], key) => (d.get(key)["val"])) // this uses this format because the data is the index created by the below, aka a nested map by the 2 keys (so d is inner map)
-    (d3.index(tempData, d=>d.stack, d=>d.group));
-
-  let maxTotal = d3.max(stackedData, d => d3.max(d, d => d[1]));
-
-  console.log("max " + d3.max(tempData, d=>d.val)); 
-  
-  let yScale = d3.scaleLinear()
-    .domain([0, maxTotal])
-    .range([currHeight - currMargin, currMargin]) // max functions use array + accessor (nested)
-  let xScale = d3.scaleBand()
-    .domain(["first", "second"])
-    .range([currMargin, currWidth - currMargin]) 
-    .padding(0.1);
-  let color = d3.scaleOrdinal() //TODO
-    .domain(["solar", "wind"])
-    .range(['#e41a1c','#377eb8'])
-
-  console.log(stackedData);
-  console.log(xScale("first"))
-
-  // Bars
-  d3.selectAll(".cell > * > .vis")
-    .selectAll("g")
-    .data(stackedData)
-    .join("g")
-      .attr("fill", d=>color(d.key))
-    .selectAll("rect")
-      .data(d=>d)
-      .join("rect")
-      .attr("x", d=>xScale(d.data[0]))
-      .attr("y", d=>yScale(d[1]))
-      .attr("height", function(d) { return yScale(d[0]) - yScale(d[1]); })
-      .attr("width", xScale.bandwidth())
-
-  // X-axis
-  d3.selectAll(".cell > * > .vis")
-    .append("g")
-    .attr("transform", "translate(0, " + (currHeight - currMargin) + ")")
-    .call(d3.axisBottom(xScale).tickSizeOuter(0));
-
-  // Y-axis
-  d3.selectAll(".cell > * >.vis")
-    .append("g")
-    .attr("transform", "translate(" + currMargin + ", 0)")
-    .call(d3.axisLeft(yScale).tickValues([0, maxTotal]));
-    */
 }
 
 // Visualize & print relevant text for the electricity generation & import data contained at the bottom
 function visualizeElectricityData() {
-  // TODO print stored values (from pull or input) as text
-  // + visualize as treemap (colors? same as other? brown vs green? cross-mapping upon switch? ...)
+  // TODO visualize as treemap (colors? same as other? brown vs green? cross-mapping upon switch? ...)
   // pastel1 vs dark2?
   // also align the groups that elec gen vs primaries are defined by (see: issue with other/biomass/petroleum) after this works
-  // need to figure out gen vs use issue...
 
   let electricityBox = d3.select(".electricity");
 
-  // Calculate & display difference between available and needed electricity
+  // Electricity generation
+  for(let currElectricityPiece of electricity.values()) {
+    let currHTMLKey = currElectricityPiece.key.replace(/\s+/, '-');
+    let currPieceBox = electricityBox.select(".input-container.type-piece-" + currHTMLKey);
+    currPieceBox.select(".elec-piece-input").property("value", currElectricityPiece["adjustedVal"]); // TODO comma format? would need to be a text box & get parsed if so
+  }
+
+  // Imports
+  let importBox = electricityBox.select(".input-container.type-piece-import");
+  importBox.select(".elec-piece-input").property("value", elecImport["adjustedVal"]);
+
+  // Transmission efficiency
+  let transEffBox = electricityBox.select(".input-container.type-transmission-efficiency");
+  transEffBox.select(".slider").property("value", transmissionEfficiency);
+  transEffBox.select(".slider-output").text(formatCommas(transmissionEfficiency));
+
+  // Calculate & display difference between available and needed electricity (taking into account the transmission efficiency)
   let currDemand = 0;
   for(let currSubset of sectorsCons.subsetsMap.values()) {
     currDemand += currSubset.subSubsets.get("electric")["adjustedVal"];
   }
   for(let currElectricityPiece of electricity.values()) {
-    currDemand -= currElectricityPiece["adjustedVal"];
+    currDemand -= currElectricityPiece["adjustedVal"] * transmissionEfficiency;
   }
-  currDemand -= elecImport["adjustedVal"];
+  currDemand -= elecImport["adjustedVal"] * transmissionEfficiency;
 
-  if(currDemand > 0) {
+  if(currDemand >= 0) {
     electricityBox.select(".demand-output").text("Demand remaining to fill: " + formatCommas(currDemand) + " GWh");
   } else {
     electricityBox.select(".demand-output").text("Over demand by: " + formatCommas(-currDemand) + " GWh");
   }
-
-  // Electricity generation
-  for(let currElectricityPiece of electricity.values()) {
-    let currHTMLKey = currElectricityPiece.key.replace(/\s+/, '-');
-    let currPieceBox = electricityBox.select(".input-container.type-" + currHTMLKey);
-    currPieceBox.select(".generation-output").property("value", currElectricityPiece["adjustedVal"]); // TODO comma format? would need to be a text box & get parsed if so
-  }
-
-  // Imports
-  let importBox = electricityBox.select(".input-container.type-import");
-  importBox.select(".generation-output").property("value", elecImport["adjustedVal"]);
 }
 
 // -----------------------------------------------------
@@ -1166,7 +1101,7 @@ function storeSectorData(allFullsEnergy) {
 
 // For pullStoreData()
 // Dissects & stores EIA API response data for in the electricity generation values map for the current-set year & state
-// as well as storing the electricity import value
+// as well as storing the electricity import value and calculating initial transmission efficiency value
 // If no data for some value, assumes it 0
 // Some of these end up negative, but it's because in the pulled data itself, they are negative
 function storeElectricityData(allFullsElecGen, allFullsImport) {  
@@ -1240,12 +1175,25 @@ function storeElectricityData(allFullsElecGen, allFullsImport) {
     console.log(currElectricityPiece["key"] + " " + currElectricityPiece["baseVal"]);
   }
   console.log("import " + elecImport["adjustedVal"]);
+
+  // Transmission efficiency
+  let currElecGenSum = 0;
+  for(let currElectricityPiece of electricity.values()) {
+    currElecGenSum += currElectricityPiece["adjustedVal"];
+  }
+  currElecGenSum += elecImport["adjustedVal"];
+
+  let currElecUseSum = 0;
+  for(let currSubset of sectorsCons.subsetsMap.values()) {
+    currElecUseSum += currSubset.subSubsets.get("electric")["adjustedVal"];
+  }
+  
+  transmissionEfficiency = currElecUseSum / currElecGenSum;
 }
 
 // For updateSectorSlider(), updateElecEfficiency()
 // The min amount of primaries that can be left unelectrified is the green primaries: if the electrification % goes too high (or elecEfficiency changes 
-// the max electrification %), it will be checked & reduced to its max value by the below, for some key of some currSubset. Function also prints adjustments
-// onto screen.
+// the max electrification %), it will be checked & reduced to its max value by the below, for some key of some currSubset. 
 function preventGreenElectrification(currSector) {
     let currSubset = sectorsCons.subsetsMap.get(currSector);
 
@@ -1269,10 +1217,6 @@ function preventGreenElectrification(currSector) {
 
     if(currSubset["adjustedElectrification"] > maxElectrification) {
       currSubset["adjustedElectrification"] = maxElectrification;
-
-      let currSectorBox = d3.select(".cell.sector-" + currSector);
-      currSectorBox.select(".type-electrification > .slider").property("value", maxElectrification);
-      currSectorBox.select(".type-electrification > .slider-output").text(maxElectrification.toFixed(2) + "%"); 
     }
 }
 
