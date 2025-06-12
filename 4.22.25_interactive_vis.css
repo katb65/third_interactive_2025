@@ -11,16 +11,30 @@
     background-color: lightblue;
 }
 
-div.input-container * {
+.electricity > div {
+    display: inline-block;
+}
+
+.input-container * {
     display: inline;
 }
 
-.cell.vis-container {
+.cell .vis-container {
     width: 300px; 
     height: 150px;
 }
 
-.cell.vis {
+.cell .vis {
     width: 300px; 
     height: 150px;
+}
+
+.electricity .vis-container {
+    width: 250px;
+    height: 300px;
+}
+
+.electricity .vis {
+    width: 250px;
+    height: 300px;
 }

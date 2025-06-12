@@ -24,16 +24,6 @@ class PrimaryPiece {
 
     adjustedVal; // GWh
 
-    // Which primary & electric fuel pieces are considered green vs not green (set to defaults, adjusted by user)
-    // TODO: ASK?: the green & ngreen pieces are slightly different for primary vs electric... nuclear ofc just doesn't exist in primary, but biomass?
-    // is that part of "other" for primary? does that mean we then separate it from other for the primaries? there is no "biomass" section per sector;
-    // there is however an "all petroleum products" vs "all petroleum products excluding biofuels" division per sector. are all biofuels petroleum - doubt it,
-    // things are burned too? we could just group them into "other", but also issue 2: electricity gen vis doesn't have petroleum as a division, in turn -
-    // oh i think we combined it into other since we do have a petroleum liquids/petroleum coke section in the EIA data
-    // TODO for now just load in the primary pieces' parts and we'll think about how to tie in electric later
-    // TODO SAYS: yeah just combine these into other since data is not sufficient to split out biomass in elec gen
-    // ADD petroleum to the electricity pieces
-
     // add means add together, sub means subtract from these, all to get final base total for primary
     // b/c some vals come with caveats (ex. natural gas needs supplemental fuels subtracted)
     constructor(key, idsEnergyAdd, idsEnergySub) {
@@ -168,28 +158,6 @@ class ElectricityPiece {
   }
 }
 
-/*
-
-okay now how to split these primaries into green, ngreen, and unelectrifiable, w consistent object modeling to quickly rerun d3 mappings?
-when user elects to use unelectrifiables, we just rewire the primary pieces to add several new ones for aviation/marine, and subtract out their vals from
-the id subtract pieces of the overarching petroleum or whatever it is. vice versa if they unselect that checkbox.
-we always store the primary pieces in their bulk big map. separately in display vars, we have our bar graph mappings, to primary piece keys:
-green->solar, wind, ... ngreen->coal, gas,... nuclear? depends! what did they choose?, ... unelectrifiable->depends if this even exists! aviation, cargoships,...
-the demand/electrification% will not need to jump around when a piece switches bar categories, since ofc it totals to the same; so that part is fine.
-however! the green primaries need not be electrified. so if they say nuclear is ngreen, slide electrification to 100%, then say actually nuclear is green,
-they will now need LESS electricity; and i guess demand will also change? no it won't bc the way the slider will be set up will be to dual the if 100% electrified/
-if 100% nonelectrified vals on top/bottom. no but those vals will need to change bc the amount of the thing (nongreen primaries) that is being electrified, changes.
-TODO:
-okay so the thing that happens when they switch something like this is: the system adjusts electrification% and checks if it has overflowed: if it has,
-the system adjusts it back to 100%, and removes that need-for-electricity from the bottom electrification spot (simple way: just have a blurb that says "you have
-x gwh more electricity than required!/you need x gwh more electricity to fulfill demand!")
-TODO: 
-try and make sure that when we bind the data, we bind it somehow in a key-matching-way, so the system does not redraw data it already has ..? or will it be
-out of order, then, if things get slid around...
-
-
-*/
-
 // -----------------------------------------------------
 // ---Inner Variables: ---
 // -----------------------------------------------------
@@ -210,7 +178,6 @@ let sectorsCons = {idAllFuelCO2: "TO", idElecSectorCO2: "EC", idCoalCO2: "CO", i
 
 // using end-use, not net, for total (net was too small, primary parts overflowed); so we can't pull primary (similar process subtractions in it as in net), 
 // we must subtract electric to get it
-// TODO change the factors from 0.8 to be accurate ones
 sectorsCons.subsetsMap.set("residential", new SectorSubset("residential", 0.2, "ESRCB", "TNRCB",
                                                   null, "SORCB", "GERCB", null,
                                                   "CLRCB", "NGRCB", "SFRCB", "PARCB")); // TODO CO2? "RC"
@@ -232,13 +199,15 @@ let electricity = new Map();
 electricity.set("wind", new ElectricityPiece("wind", ["WND"]));
 electricity.set("solar", new ElectricityPiece("solar", ["SUN"])); // PV & thermal
 electricity.set("geothermal", new ElectricityPiece("geothermal", ["GEO"]));
-electricity.set("nuclear", new ElectricityPiece("nuclear", ["NUC"]));
 electricity.set("hydroelectric", new ElectricityPiece("hydroelectric", ["HYC", "HPS"])); // Conventional and pumped storage
-electricity.set("biomass", new ElectricityPiece("biomass", ["BIO"]));
+electricity.set("nuclear", new ElectricityPiece("nuclear", ["NUC"]));
 
 electricity.set("coal", new ElectricityPiece("coal", ["COW"]));
 electricity.set("natural gas", new ElectricityPiece("natural gas", ["NG"]));
-electricity.set("other", new ElectricityPiece("other", ["PEL", "PC", "OOG", "OTH"]));
+electricity.set("petroleum", new ElectricityPiece("petroleum", ["PEL", "PC"]));
+
+electricity.set("other", new ElectricityPiece("other", ["OOG", "OTH", "BIO"])); 
+// (can't split out biomass since it's available here but not in the energy demand section)
 
 // Separate, because it is pulled from a different section of the EIA site
 let elecImport = new ElectricityPiece("import", ["ELNIP", "ELISP"]);
@@ -247,7 +216,7 @@ let elecImport = new ElectricityPiece("import", ["ELNIP", "ELISP"]);
 let transmissionEfficiency = null;
 
 // Set of primary pieces considered green
-let greenSet = new Set(["wind", "solar", "hydroelectric", "geothermal"]);
+let greenSet = new Set(["wind", "solar", "geothermal", "hydroelectric", "nuclear"]);
 
 // -----------------------------------------------------
 // ---Display Variables: ---
@@ -275,11 +244,13 @@ colorMap.set("wind", {green: d3.schemePastel2[1], ngreen: null});
 colorMap.set("solar", {green: d3.schemePastel2[2], ngreen: null});
 colorMap.set("geothermal", {green: d3.schemePastel2[3], ngreen: d3.schemeCategory10[0]});
 colorMap.set("hydroelectric", {green: d3.schemePastel2[4], ngreen: d3.schemeCategory10[1]});
+colorMap.set("nuclear", {green: d3.schemePastel2[5], ngreen: d3.schemeCategory10[2]});
 
-colorMap.set("coal", {green: null, ngreen: d3.schemeCategory10[2]});
-colorMap.set("natural gas", {green: null, ngreen: d3.schemeCategory10[3]});
-colorMap.set("petroleum", {green: null, ngreen: d3.schemeCategory10[4]});
-colorMap.set("other", {green: null, ngreen: d3.schemeCategory10[5]});
+colorMap.set("coal", {green: null, ngreen: d3.schemeCategory10[3]});
+colorMap.set("natural gas", {green: null, ngreen: d3.schemeCategory10[4]});
+colorMap.set("petroleum", {green: null, ngreen: d3.schemeCategory10[5]});
+
+colorMap.set("other", {green: null, ngreen: d3.schemeCategory10[6]});
 
 // -----------------------------------------------------
 // ---HTML Element Adjustments: ---
@@ -300,12 +271,12 @@ d3.selectAll(".cell > .input-container.type-demand,.input-container.type-electri
   .on("change", (event) => updateSectorSlider(event));
 
 d3.selectAll(".cell > .type-elec-efficiency > .slider")
-  .on("change", (event) => updateElecEfficiency(event)); // TODO rewire elec efficiency to be formatted as the transmission efficiency is
+  .on("change", (event) => updateElecEfficiency(event));
 
-d3.selectAll(".electricity > * > .elec-piece-input")
+d3.selectAll(".electricity .elec-piece-input")
   .on("change", (event) => updateElectricity(event));
 
-d3.select(".electricity > .input-container.type-transmission-efficiency > .slider")
+d3.select(".electricity .input-container.type-transmission-efficiency > .slider")
   .on("change", (event) => updateTransEff(event));
 
 // -----------------------------------------------------
@@ -369,13 +340,12 @@ function updateSectorSlider(event) {
     console.log(currSector);
     console.log(currType);
 
-    // Store data + adjust electrification if needed
+    // Store data + adjust electrification if needed (currValue may be inaccurate after preventGreenElectrification)
     let currSubset = sectorsCons.subsetsMap.get(currSector);
 
     if(currType === "electrification") {
       currSubset["adjustedElectrification"] = currValue;
       preventGreenElectrification(currSector);
-      currValue = currSubset["adjustedElectrification"];
     } else if(currType === "demand") {
       currSubset["adjustedDemand"] = currValue;
     } else {
@@ -404,11 +374,11 @@ function updateElecEfficiency(event) {
 
     let currSubset = sectorsCons.subsetsMap.get(currSector);
 
-    // Store new efficiency + update electrification if needed
+    // Store new  & update electrification if needed
     currSubset["elecEfficiency"] = currValue;
     preventGreenElectrification(currSector);
 
-    // Update data to reflect it
+    // Update data to reflect it (propagate effects)
     calculateStoreAdjustedVals(currSubset);
 
     // Visualize event update
@@ -424,11 +394,11 @@ function updateElectricity(event) {
     // Narrow down where event occurred
     let currPieceBox = d3.select(event.target.parentNode);
 
-    let currElecGenType = currPieceBox.attr("class").split(" ")
+    let currElectricityType = currPieceBox.attr("class").split(" ")
         .find((element) => /type-piece-/.test(element)).slice(11); // locate the class pertaining to the piece name & isolate it
 
     // Store new value
-    let currJSKey = currElecGenType.replace(/-+/, ' ')
+    let currJSKey = currElectricityType.replace(/-+/, ' ')
 
     if(currJSKey === "import") {
       elecImport["adjustedVal"] = currValue;
@@ -467,22 +437,6 @@ async function initialize() {
     await initializeYears();
 
     await pullStoreData();
-
-    // TODO move this to some other print/vis data func (as below)
-    d3.selectAll(".cell")
-        .each(function(d,i) {
-            let currSectorBox = d3.select(this);
-            let currSector = currSectorBox.attr("class").split(" ")
-                .find((element) => /sector-/.test(element)).slice(7);
-
-            let currAdjustedElectrification = sectorsCons.subsetsMap.get(currSector)["adjustedElectrification"];
-            let currElecEfficiency = sectorsCons.subsetsMap.get(currSector)["elecEfficiency"];
-
-            currSectorBox.select(".type-electrification > .slider").property("value", currAdjustedElectrification);
-            currSectorBox.select(".type-electrification > .slider-output").text(currAdjustedElectrification.toFixed(2) + "%");
-            currSectorBox.select(".elec-efficiency").property("value", currElecEfficiency);
-        });
-
 
     visualizeSectorData();
     visualizeElectricityData();
@@ -593,8 +547,8 @@ function visualizeSectorData(currSector = null) {
     // Layout number specifics
     let currMargin = 20;
     let currLeftMargin = 60;
-    let currHeight = parseInt(d3.select(".cell > * > .vis").style("height").slice(0, -2));
-    let currWidth = parseInt(d3.select(".cell > * > .vis").style("width").slice(0, -2));
+    let currHeight = parseInt(d3.select(".cell .vis").style("height").slice(0, -2));
+    let currWidth = parseInt(d3.select(".cell .vis").style("width").slice(0, -2));
 
     // Create object usable by the vis
     let currData = [];
@@ -720,6 +674,67 @@ function visualizeElectricityData() {
   } else {
     electricityBox.select(".demand-output").text("Over demand by: " + formatCommas(-currDemand) + " GWh");
   }
+
+  // Visualize
+  
+  var currJson = {
+    name: "Electricity Generation In " + state + " By Pieces",
+    children: [
+      {
+        name: "Clean Electricity",
+        children: [] 
+      },
+      {
+        name: "Non-Clean Electricity",
+        children: []
+      }
+    ]
+  }
+
+  // Set up JSON object of values to visualize
+  for(let currElectricityPiece of electricity.values()) {
+    // Don't add the 0-gen pieces to the vis, they only make it rearrange when not necessary
+    // Also don't add the negatives (there aren't any big ones & negatives can't be visualized here)
+    if(currElectricityPiece["adjustedVal"] <= 0) {
+      continue;
+    }
+
+    if(greenSet.has(currElectricityPiece["key"])) {
+      currJson.children[0].children.push({key: currElectricityPiece["key"], val: currElectricityPiece["adjustedVal"]});
+    } else {
+      currJson.children[1].children.push({key: currElectricityPiece["key"], val: currElectricityPiece["adjustedVal"]});
+    }
+  }
+
+  var currHierarchy = d3.hierarchy(currJson) // adds depth, height, parent to the data
+                        .sum(d=>d["val"])
+                        .sort((a,b) => b["val"] - a["val"]); // sort in descending order
+
+  // Set up the dimensions of a treemap, then pass the data to it
+  var currTreemap = d3.treemap()
+                      .tile(d3.treemapSliceDice) // make the subsections in logs rather than jumbled
+                      .size([d3.select(".electricity .vis").style("width").slice(0, -2), d3.select(".electricity .vis").style("height").slice(0, -2)])
+                      .padding(1);
+  var currRoot = currTreemap(currHierarchy); // determines & assigns x0, x1, y0, & y1 attrs for the data
+
+  // Now we can make rect elements of these nodes & append them to an svg element on the screen
+  var svgVis = d3.select(".electricity .vis");
+
+  svgVis.selectAll("rect") // by the D3 update pattern it creates new rects upon the "join()" call
+     .data(currRoot.leaves().filter(d=>d.depth == 2))
+     .join("rect")
+     .attr("x", d=>d.x0)
+     .attr("y", d=>d.y0)
+     .attr("width", d=>d.x1-d.x0)
+     .attr("height", d=>d.y1-d.y0)
+     .attr("fill", (d) => {
+        if(greenSet.has(d.data.key)) {
+          return colorMap.get(d.data.key)["green"];
+        } else {
+          return colorMap.get(d.data.key)["ngreen"];
+        }
+     });
+     // TODO tooltip
 }
 
 // -----------------------------------------------------
@@ -749,7 +764,7 @@ function disableUserInput() {
         .property("disabled", true);
     d3.select("#GWh-or-GW-drop")
         .property("disabled", true);
-    d3.selectAll(".cell > * > .slider")
+    d3.selectAll(".cell .slider")
         .property("disabled", true);
 }
 
@@ -762,7 +777,7 @@ function enableUserInput() {
         .attr("disabled", null);
     d3.select("#GWh-or-GW-drop")
         .attr("disabled", null);
-    d3.selectAll(".cell > * > .slider")
+    d3.selectAll(".cell .slider")
         .attr("disabled", null);
 }
 
@@ -1090,7 +1105,7 @@ function storeSectorData(allFullsEnergy) {
       currSubset.subSubsets.get("electric")["adjustedVal"] = currSubset.subSubsets.get("electric")["baseVal"];
 
       currSubset["adjustedDemand"] = 100;
-      currSubset["adjustedElectrification"] = (((currSubset.subSubsets.get("electric")["baseVal"])/(currSubset.subSubsets.get("total")["baseVal"])) * 100);
+      currSubset["adjustedElectrification"] = 100 * (currSubset.subSubsets.get("electric")["baseVal"])/(currSubset.subSubsets.get("total")["baseVal"]);
     }
 }
 
@@ -1128,8 +1143,8 @@ function storeElectricityData(allFullsElecGen, allFullsImport) {
     }
 
     for(let currElectricityPiece of electricity.values()) {
-      for(let currElecGenID of currElectricityPiece["ids"]) {
-        if(currElecGenID === currFullElecGen["fueltypeid"]) { 
+      for(let currElectricityID of currElectricityPiece["ids"]) {
+        if(currElectricityID === currFullElecGen["fueltypeid"]) { 
           currElectricityPiece["baseVal"] += postConvert;
         }
       }
@@ -1172,18 +1187,18 @@ function storeElectricityData(allFullsElecGen, allFullsImport) {
   console.log("import " + elecImport["adjustedVal"]);
 
   // Transmission efficiency
-  let currElecGenSum = 0;
+  let currElectricitySum = 0;
   for(let currElectricityPiece of electricity.values()) {
-    currElecGenSum += currElectricityPiece["adjustedVal"];
+    currElectricitySum += currElectricityPiece["adjustedVal"];
   }
-  currElecGenSum += elecImport["adjustedVal"];
+  currElectricitySum += elecImport["adjustedVal"];
 
   let currElecUseSum = 0;
   for(let currSubset of sectorsCons.subsetsMap.values()) {
     currElecUseSum += currSubset.subSubsets.get("electric")["adjustedVal"];
   }
   
-  transmissionEfficiency = currElecUseSum / currElecGenSum;
+  transmissionEfficiency = currElecUseSum / currElectricitySum;
 }
 
 // For updateSectorSlider(), updateElecEfficiency()
