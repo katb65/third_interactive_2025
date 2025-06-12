@@ -170,6 +170,7 @@ class CO2Piece {
 
 // To store pieces of the CO2 data in separate objects
 // Contains map to further pieces that hold the values (initial & adjusted based on user's adjustments of energy/electricity sources)
+// TODO: should this be reworked so that electric is proportionally contained as parts of all the other subsets..? (and all the fuel subpieces associated...?)
 class CO2Subset {
   key; // ex. "residential"
   id; // id for this CO2 sector
@@ -246,13 +247,21 @@ let transmissionEfficiency = null;
 
 // Store CO2 IDs that are repeatedly used outside for less redundancy + overall ids and values map
 // (subset key -> CO2Subset object)
-let co2 = {"coal": "CO", "natural gas": "NG", "petroleum": "PE", map: new Map()};
+let co2 = {ids: new Map(), map: new Map()};
+
+co2.ids.set("CO", "coal");
+co2.ids.set("NG", "natural gas");
+co2.ids.set("PE", "petroleum");
 
 co2.map.set("residential", new CO2Subset("residential", "RC"));
-co2.map.set("commercial", new CO2Subset("residential", "CC"));
-co2.map.set("industrial", new CO2Subset("residential", "IC"));
-co2.map.set("transportation", new CO2Subset("residential", "TC"));
+co2.map.set("commercial", new CO2Subset("commercial", "CC"));
+co2.map.set("industrial", new CO2Subset("industrial", "IC"));
+co2.map.set("transportation", new CO2Subset("transportation", "TC"));
 co2.map.set("electric", new CO2Subset("electric", "EC"));
+
+// TODO: methods for pullStoreCO2, for recalculateCO2, and for visualizeCO2
+// Then probably fix the bar graph variable sizes inside the sectors + make electricity inputs demand% based, not pure number based.
+// And year pull!! And interactivity disabling. And the GWh/GW switch.
 
 // Set of primary pieces considered green
 let greenSet = new Set(["wind", "solar", "geothermal", "hydroelectric", "nuclear"]);
@@ -333,6 +342,7 @@ async function updateState() {
 
   visualizeEnergyData();
   visualizeElectricityData();
+  visualizeCO2Data();
 
   enableUserInput();
 }
@@ -348,6 +358,7 @@ async function updateYear() {
 
   visualizeEnergyData();
   visualizeElectricityData();
+  visualizeCO2Data();
 
   enableUserInput();
 }
@@ -398,6 +409,7 @@ function updateSectorSlider(event) {
     // Print/visualize event update based on the now stored data
     visualizeEnergyData(currSector);
     visualizeElectricityData();
+    visualizeCO2Data();
 }
 
 // Called on user changing the electricity efficiency factor for some sector
@@ -448,6 +460,7 @@ function updateElectricity(event) {
 
     // Visualize event update
     visualizeElectricityData();
+    visualizeCO2Data();
 }
 
 // Called on user changing electricity transmission efficiency
@@ -479,6 +492,7 @@ async function initialize() {
 
     visualizeEnergyData();
     visualizeElectricityData();
+    visualizeCO2Data();
 
     enableUserInput();
 }
@@ -542,17 +556,20 @@ async function pullStoreData() {
     //let allFullsCO2Promise = d3.json(composeQueryString("CO2", "value", state, (year-1), (year+1)));
     let allFullsElectricityPromise = d3.json(composeQueryString("electricity", "generation", state, (year-1), (year+1)))
     let allFullsImportPromise = d3.json(composeQueryString("import", "value", state, (year-1), (year+1)));
+    let allFullsCO2Promise = d3.json(composeQueryString("CO2", "value", "US", (year-1), (year+1)));
     
     let allFullsEnergy = await allFullsEnergyPromise;
     //let allFullsCO2 = await allFullsCO2Promise;
     let allFullsElectricity = await allFullsElectricityPromise;
     let allFullsImport = await allFullsImportPromise;
+    let allFullsCO2 = await allFullsCO2Promise;
 
-    console.log(allFullsImport);
+    console.log(allFullsCO2);
     
   
     storeSectorData(allFullsEnergy); // TODO later pass allFullsCO2 to store also
     storeElectricityData(allFullsElectricity, allFullsImport);
+    storeCO2Data(allFullsCO2);
 
     // TODO imports of elec? will need to remark on limitation of getting the env. impacts of this as well (CO2 pull is very limited)
   
@@ -776,6 +793,19 @@ function visualizeElectricityData() {
      // TODO tooltip
 }
 
+// Visualize & print relevant text for the CO2 output
+function visualizeCO2Data() {
+  console.log("CO2");
+  for(let currSubset of co2.map.values()) {
+    console.log("");
+    console.log(currSubset["key"]);
+    for(let currCO2Piece of currSubset.co2Pieces.values()) {
+      console.log(currCO2Piece["key"]);
+      console.log(currCO2Piece["adjustedVal"]);
+    }
+  }
+}
+
 // -----------------------------------------------------
 // ---Helper Functions: ---
 // -----------------------------------------------------
@@ -899,10 +929,10 @@ function composeQueryString(queryType, query, stateId, start, end) {
   
     if(queryType === "energy" || queryType === "import") {
       allQueryString = "https://api.eia.gov/v2/seds/data/?";
-    } else if(queryType === "CO2") {
-      allQueryString = "https://api.eia.gov/v2/co2-emissions/co2-emissions-aggregates/data/?";
     } else if(queryType === "electricity") {
       allQueryString = "https://api.eia.gov/v2/electricity/electric-power-operational-data/data/?";
+    } else if(queryType === "CO2") {
+      allQueryString = "https://api.eia.gov/v2/co2-emissions/co2-emissions-aggregates/data/?";
     } else {
       throw new Error("Unexpected value in queryType: " + queryType);
     }
@@ -943,19 +973,6 @@ function composeQueryString(queryType, query, stateId, start, end) {
           }
         }
       }
-    } else if(queryType === "CO2") {
-      allQueryString += ("&facets[fuelId][]=" + consumption.idAllFuelCO2);
-      allQueryString += ("&facets[sectorId][]=" + consumption.idElecSectorCO2);
-  
-      for(let currSubset of consumption.values()) {
-        allQueryString += ("&facets[sectorId][]=" + currSubset.subSubsets.get("primary").idSectorCO2);
-      }
-  
-      if(query !== null) {
-        allQueryString += ("&facets[fuelId][]=" + consumption.idCoalCO2);
-        allQueryString += ("&facets[fuelId][]=" + consumption.idNatGasCO2);
-        allQueryString += ("&facets[fuelId][]=" + consumption.idPetroleumCO2);
-      }
     } else if(queryType === "electricity") { 
       for(let currElectricityPiece of electricity.values()) {
         for(let currID of currElectricityPiece["ids"]) {
@@ -966,6 +983,14 @@ function composeQueryString(queryType, query, stateId, start, end) {
     } else if(queryType === "import") {
       for(let currID of elecImport["ids"]) {
         allQueryString += ("&facets[seriesId][]=" + currID);
+      }
+    } else if(queryType === "CO2") {
+      for(let currPieceID of co2.ids.keys()) {
+        allQueryString += ("&facets[fuelId][]=" + currPieceID);
+      }
+  
+      for(let currSubset of co2.map.values()) {
+        allQueryString += ("&facets[sectorId][]=" + currSubset["id"]);
       }
     } else {
       throw new Error("Unexpected value in queryType: " + queryType);
@@ -1038,81 +1063,7 @@ function storeSectorData(allFullsEnergy) {
       }
     }
   
-    /*
-    // isolate the requested values from the CO2 response & store them in the right spots
-    for(let currFullCO2 of allFullsCO2.response.data) {
-      if(parseInt(currFullCO2.period) != year) {
-        continue; // we fetched several years near current year due to variable API mechanics, so cycle past irrelevant ones
-      }
-  
-      if(currFullCO2["value-units"] !== "million metric tons of CO2" || currFullCO2.stateId !== stateId) { // year & sector ID already checked
-        throw new Error("Unexpected unit or state ID mismatch in pulled API data with " + currFullCO2 + " units " + currFullCO2["value-units"]);
-      }
-  
-      if(currFullCO2.sectorId === consumption.idElecSectorCO2 && currFullCO2.fuelId === consumption.idAllFuelCO2) {
-        // if this is the electric sector val, it needs to be split proportionally & stored in all the elecSector sub-subsets in pieces
-  
-        let postConvert;
-        if(isNaN(parseFloat(currFullCO2.value))) {
-          postConvert = 0;
-        } else {
-          // read in response val
-          postConvert = parseFloat(currFullCO2.value);
-        }
-  
-        let residentialElec = consumption.get("residential").subSubsets.get("elecSector");
-        let commercialElec = consumption.get("commercial").subSubsets.get("elecSector");
-        let industrialElec = consumption.get("industrial").subSubsets.get("elecSector");
-        let transportationElec = consumption.get("transportation").subSubsets.get("elecSector");
-        
-        if(stateOrUS === "state") {
-          let electricTotal = commercialElec.valState + industrialElec.valState + transportationElec.valState + residentialElec.valState;
-  
-          residentialElec.co2State = postConvert * (residentialElec.valState/electricTotal);
-          commercialElec.co2State = postConvert * (commercialElec.valState/electricTotal);
-          industrialElec.co2State = postConvert * (industrialElec.valState/electricTotal);
-          transportationElec.co2State = postConvert * (transportationElec.valState/electricTotal);
-        } else {
-          let electricTotal = commercialElec.valUS + industrialElec.valUS + transportationElec.valUS + residentialElec.valUS;
-  
-          residentialElec.co2US = postConvert * (residentialElec.valUS/electricTotal);
-          commercialElec.co2US = postConvert * (commercialElec.valUS/electricTotal);
-          industrialElec.co2US = postConvert * (industrialElec.valUS/electricTotal);
-          transportationElec.co2US = postConvert * (transportationElec.valUS/electricTotal);
-        }
-      } else { // not EC, so a primary sector's val or primary piece val, find the corresponding sector & its primary sub subset or that sub subset's correct piece
-        for(let currSubset of consumption.values()) {
-          for(let currSubSubset of currSubset.subSubsets.values()) {
-            if(currSubSubset.idSectorCO2 === currFullCO2.sectorId) {
-  
-              let postConvert;
-              if(isNaN(parseFloat(currFullCO2.value))) {
-                postConvert = 0;
-              } else {
-                postConvert = parseFloat(currFullCO2.value);
-              }
-  
-              if(currFullCO2.fuelId === consumption.idAllFuelCO2) { // CO2 of all fuels for this sector  
-                // store read-in val in currSubSubset
-                currSubSubset[accessCO2] = postConvert;
-              } else { // CO2 of some primary piece of fuel for this sector
-                if(currFullCO2.fuelId === consumption.idCoalCO2) {
-                  currSubSubset.primaryPieces.get("coal")[accessCO2] = postConvert;
-                } else if (currFullCO2.fuelId === consumption.idNatGasCO2) {
-                  currSubSubset.primaryPieces.get("natural gas")[accessCO2] = postConvert;
-                } else if (currFullCO2.fuelId === consumption.idPetroleumCO2) {
-                  currSubSubset.primaryPieces.get("petroleum")[accessCO2] = postConvert;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-      */
-  
-    // sum and store the CO2 totals per sector as well (not directly pullable due to our proportioning of electric sector) (TODO)
-    // & derive the primary values and primary pieces inner totals,"other" (leftover of what was pulled), and electrification %
+    // derive the primary values and primary pieces inner totals, "other" (leftover of what was pulled), and electrification %
     // & set adjusted pieces to start at base
     for(let currSubset of consumption.values()) {
         /*
@@ -1238,6 +1189,118 @@ function storeElectricityData(allFullsElecGen, allFullsImport) {
   }
   
   transmissionEfficiency = currElecUseSum / currElectricitySum;
+}
+
+// For pullStoreData()
+// Dissects & stores EIA API response data for in the CO2 values map for the current-set year & state
+// If no data for some value, assumes it 0
+// NOTE: assumes energy & electricity data to be stored, used to calculate CO2 ratios
+function storeCO2Data(allFullsCO2) {
+  for(let currFullCO2 of allFullsCO2.response.data) {
+    if(parseInt(currFullCO2["period"]) != year) {
+      continue; // we fetched several years near current year due to variable API mechanics, so cycle past irrelevant ones
+    }
+
+    if(currFullCO2["value-units"] !== "million metric tons of CO2" || currFullCO2["stateId"] !== state) { // year & sector ID already checked
+      throw new Error("Unexpected unit or state ID mismatch in pulled API data with " + currFullCO2 + " units " + currFullCO2["value-units"]);
+    }
+
+    let postConvert;
+    if(isNaN(parseFloat(currFullCO2.value))) {
+      postConvert = 0;
+    } else {
+      // read in response val
+      postConvert = parseFloat(currFullCO2.value);
+    }
+
+    for(let currSubset of co2.map.values()) {
+      if(currSubset["id"] === currFullCO2["sectorId"]) {
+        let currPieceKey = co2.ids.get(currFullCO2["fuelId"]);
+        currSubset.co2Pieces.get(currPieceKey)["baseVal"] = postConvert;
+      }
+    }
+  }
+
+  // Set adjusted vals to start at base
+  for(let currSubset of co2.map.values()) {
+    for(let currCO2Piece of currSubset.co2Pieces.values()) {
+      currCO2Piece["adjustedVal"] = currCO2Piece["baseVal"];
+    }
+  }
+
+    // TODO if change electricity CO2 storage form, use below:
+    /*
+    // isolate the requested values from the CO2 response & store them in the right spots
+    for(let currFullCO2 of allFullsCO2.response.data) {
+      if(parseInt(currFullCO2.period) != year) {
+        continue; // we fetched several years near current year due to variable API mechanics, so cycle past irrelevant ones
+      }
+  
+      if(currFullCO2["value-units"] !== "million metric tons of CO2" || currFullCO2.stateId !== stateId) { // year & sector ID already checked
+        throw new Error("Unexpected unit or state ID mismatch in pulled API data with " + currFullCO2 + " units " + currFullCO2["value-units"]);
+      }
+  
+      if(currFullCO2.sectorId === consumption.idElecSectorCO2 && currFullCO2.fuelId === consumption.idAllFuelCO2) {
+        // if this is the electric sector val, it needs to be split proportionally & stored in all the elecSector sub-subsets in pieces
+  
+        let postConvert;
+        if(isNaN(parseFloat(currFullCO2.value))) {
+          postConvert = 0;
+        } else {
+          // read in response val
+          postConvert = parseFloat(currFullCO2.value);
+        }
+  
+        let residentialElec = consumption.get("residential").subSubsets.get("elecSector");
+        let commercialElec = consumption.get("commercial").subSubsets.get("elecSector");
+        let industrialElec = consumption.get("industrial").subSubsets.get("elecSector");
+        let transportationElec = consumption.get("transportation").subSubsets.get("elecSector");
+        
+        if(stateOrUS === "state") {
+          let electricTotal = commercialElec.valState + industrialElec.valState + transportationElec.valState + residentialElec.valState;
+  
+          residentialElec.co2State = postConvert * (residentialElec.valState/electricTotal);
+          commercialElec.co2State = postConvert * (commercialElec.valState/electricTotal);
+          industrialElec.co2State = postConvert * (industrialElec.valState/electricTotal);
+          transportationElec.co2State = postConvert * (transportationElec.valState/electricTotal);
+        } else {
+          let electricTotal = commercialElec.valUS + industrialElec.valUS + transportationElec.valUS + residentialElec.valUS;
+  
+          residentialElec.co2US = postConvert * (residentialElec.valUS/electricTotal);
+          commercialElec.co2US = postConvert * (commercialElec.valUS/electricTotal);
+          industrialElec.co2US = postConvert * (industrialElec.valUS/electricTotal);
+          transportationElec.co2US = postConvert * (transportationElec.valUS/electricTotal);
+        }
+      } else { // not EC, so a primary sector's val or primary piece val, find the corresponding sector & its primary sub subset or that sub subset's correct piece
+        for(let currSubset of consumption.values()) {
+          for(let currSubSubset of currSubset.subSubsets.values()) {
+            if(currSubSubset.idSectorCO2 === currFullCO2.sectorId) {
+  
+              let postConvert;
+              if(isNaN(parseFloat(currFullCO2.value))) {
+                postConvert = 0;
+              } else {
+                postConvert = parseFloat(currFullCO2.value);
+              }
+  
+              if(currFullCO2.fuelId === consumption.idAllFuelCO2) { // CO2 of all fuels for this sector  
+                // store read-in val in currSubSubset
+                currSubSubset[accessCO2] = postConvert;
+              } else { // CO2 of some primary piece of fuel for this sector
+                if(currFullCO2.fuelId === consumption.idCoalCO2) {
+                  currSubSubset.primaryPieces.get("coal")[accessCO2] = postConvert;
+                } else if (currFullCO2.fuelId === consumption.idNatGasCO2) {
+                  currSubSubset.primaryPieces.get("natural gas")[accessCO2] = postConvert;
+                } else if (currFullCO2.fuelId === consumption.idPetroleumCO2) {
+                  currSubSubset.primaryPieces.get("petroleum")[accessCO2] = postConvert;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+      */
 }
 
 // For updateSectorSlider(), updateElecEfficiency()
