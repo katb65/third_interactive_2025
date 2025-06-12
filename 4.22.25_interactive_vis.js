@@ -3,6 +3,7 @@
 
 // ---Assumptions: ---
 // TODO
+// CO2 won't get more subsets
 
 // ---These should be changed to someone else's EIA API key & directory root (for local files) once I'm not involved with the project: ---
 // (key obtainable on EIA site):
@@ -13,6 +14,8 @@ let directoryRoot = ""; // if this is blank, doesn't seem to trigger CORS due to
 // -----------------------------------------------------
 // ---Helper Objects: ---
 // -----------------------------------------------------
+
+// Own mapping keys are stored inside so that objects are independently functional
 
 // These add together to the primary total for their sector, used to give more detail into its energy use
 class PrimaryPiece { 
@@ -42,7 +45,7 @@ class PrimaryPiece {
     }
 }
 
-// To aid in SectorSubset mapping mechanics, holds one of the pieces that a sector subset is divided into (its name, ids, and values for US & current-set state
+// To aid in EnergySubset mapping mechanics, holds one of the pieces that a sector subset is divided into (its name, ids, and values for current-set state
 // for current-set year)
 // IDs may pull in different units than stored; are converted in pull method if so
 // A sector subset is divided into 3 main pieces: elecSector, primary, and total, where elecSector + primary = total,
@@ -51,12 +54,7 @@ class PrimaryPiece {
 // total = this sector's total consumption (for the set year, not inc. "electrical system energy losses") = electric + primary
 // primary energy SubSubsets are further divided using inner map
 // null or 0 for any value means not present in EIA data (assumed 0)
-class SubSubset { // TODO; primary with maps of green and not green primary pieces! actually nvm: define these in display vars - so that pulled items stay static?
-    // no but they won't stay static anyway since user adjustment will slide them & it doesn't make sense for this use case to have them static and user adjusted
-    // add-on values separate, so just adjust straight within them - actually, how to make this more dynamic? can't redraw whole vis on every slider, need
-    // direct way to map vals to rectangles. make a functional barebones vers for now then adjust to make object directly usable. OH but if I have it separate
-    // I can have a "reset" button; and then there will be a hard line between real and created data?
-
+class SubSubset {
     key; // ex. "elecSector"
     idEnergy; // ex. "ESCCB" for a commercial sector subset, electric sub subset
 
@@ -94,13 +92,8 @@ class SubSubset { // TODO; primary with maps of green and not green primary piec
 }
 
 // To store subsets of energy consumption data per sector type in separate objects
-// Its own mapping key is stored inside again since the object needs to be independently functional (like for treemap display)
-class SectorSubset {
+class EnergySubset {
     key; // the sector type (ex. "commercial")
-
-    // TODO: should I move all the IDs, values (base/adjusted) from total into here + adjust pull & stores? will make it cleaner as demand/electrification
-    // is now a value that has to be stored here so it's no longer a valueless container. may not be worth with time tradeoff currently though.
-    // also here stored are %s whereas that is actual vals
 
     // Base demand can be found in the "total" subSubset baseVal; 
     // Base electrification can be calculated by "electric" divided by "total" baseVal
@@ -111,7 +104,7 @@ class SectorSubset {
     adjustedDemand; // % of base demand (since GWh will vary by electrification due to efficiency factors)
     adjustedElectrification; // % of adjustedDemand electrified (efficiency factor not taken into account - just raw electric/total energy)
 
-    // Maps of sub subset names, to IDs used to index into EIA and curr state vals for curr year for that ID
+    // Map of sub subset names to SubSubsets
     subSubsets; 
 
     constructor(key, elecEfficiency, idElectric, idTotal, 
@@ -132,13 +125,9 @@ class SectorSubset {
         this.subSubsets.get("primary").setupPrimaryPieces(idWind, idSolar, idGeo, idHydro,
                                                             idCoal, idNatGas, idSuppGas, idPetroleum);
     }
-
-    // TODO will CO2 be integrated here or be its own object?
 }
 
 // To store pieces of our electricity generation or import data in separate objects
-// Its own mapping key is stored inside again since the object needs to be independently functional (like for treemap display)
-// (They need to be kept separate for user to be able to adjust what they define to be clean energy without us needing to refetch)
 // null for any generation means not present in EIA data (assumed 0)
 class ElectricityPiece {
   key; // ex. "wind"
@@ -158,6 +147,47 @@ class ElectricityPiece {
   }
 }
 
+// To store pieces of the CO2 data in separate objects, holds one of the pieces a CO2Subset is divided into
+// Its corresponding ID will be found outside in the object that holds the overall CO2 map, as CO2Piece ids are the same for ones with the same keys
+// regardless of parent, and must be used alongside the parent ID to acquire the correct piece
+class CO2Piece {
+  key; // ex. "coal"
+
+  factor; // what to multiply the GWh of energy/electricity use for the corresponding piece by to achieve its CO2 output, calculated after pull
+
+  baseVal; // million metric tons
+
+  adjustedVal; // is adjusted as user adjusts the piece that causes it; million metric tons
+
+  constructor(key) {
+    this.key = key;
+
+    this.factor = null;
+    this.baseVal = null;
+    this.adjustedVal = null;
+  }
+}
+
+// To store pieces of the CO2 data in separate objects
+// Contains map to further pieces that hold the values (initial & adjusted based on user's adjustments of energy/electricity sources)
+class CO2Subset {
+  key; // ex. "residential"
+  id; // id for this CO2 sector
+
+  // Map of piece names to CO2Pieces
+  co2Pieces;
+
+  constructor(key, id) {
+    this.key = key;
+    this.id = id;
+
+    this.co2Pieces = new Map();
+    this.co2Pieces.set("coal", new CO2Piece("coal"));
+    this.co2Pieces.set("natural gas", new CO2Piece("natural gas"));
+    this.co2Pieces.set("petroleum", new CO2Piece("petroleum"));
+  }
+}
+
 // -----------------------------------------------------
 // ---Inner Variables: ---
 // -----------------------------------------------------
@@ -171,29 +201,28 @@ let year = null;
 // State name to ID mapping (for HTML dropdown & for state capacity generation)
 let stateNameToID = new Map();
 
-// Store CO2 IDs that are repeatedly used (TODO: use or put in other obj) outside + overall ids and values map (map inside is subset key -> FuelSubset object)
-// IDs pull energy in Billion BTU, need conversion (CO2 emissions have correct unit)
-// (CO2 ID storing outside makes them harder to store when pulling but gives less redundancy during query formulation)
-let sectorsCons = {idAllFuelCO2: "TO", idElecSectorCO2: "EC", idCoalCO2: "CO", idNatGasCO2: "NG", idPetroleumCO2: "PE", subsetsMap: new Map()};
+// (subset key -> FuelSubset object)
+// IDs pull energy in Billion BTU, need conversion 
+let consumption = new Map();
 
 // using end-use, not net, for total (net was too small, primary parts overflowed); so we can't pull primary (similar process subtractions in it as in net), 
 // we must subtract electric to get it
-sectorsCons.subsetsMap.set("residential", new SectorSubset("residential", 0.2, "ESRCB", "TNRCB",
+consumption.set("residential", new EnergySubset("residential", 0.2, "ESRCB", "TNRCB",
                                                   null, "SORCB", "GERCB", null,
                                                   "CLRCB", "NGRCB", "SFRCB", "PARCB")); // TODO CO2? "RC"
-sectorsCons.subsetsMap.set("commercial", new SectorSubset("commercial", 0.2, "ESCCB", "TNCCB",
+consumption.set("commercial", new EnergySubset("commercial", 0.2, "ESCCB", "TNCCB",
                                                 "WYCCB", "SOCCB", "GECCB", "HYCCB",
                                                 "CLCCB", "NGCCB", "SFCCB", "PACCB")); // TODO CO2 "CC"
 // the ID is slightly different for industrial electricity than the others: it's "excluding refinery use" - hence "ESISB", not "ESICB" (the latter doesn't add up)
-sectorsCons.subsetsMap.set("industrial", new SectorSubset("industrial", 0.82, "ESISB", "TNICB",
+consumption.set("industrial", new EnergySubset("industrial", 0.82, "ESISB", "TNICB",
                                                 "WYICB", "SOICB", "GEICB", "HYICB",
                                                 "CLICB", "NGICB", "SFINB", "PAICB")); // TODO CO2 "IC"
 // NGASB not NGACB for transportation's natural gas (there's no supplemental fuels to subtract out by ID here)
-sectorsCons.subsetsMap.set("transportation", new SectorSubset("transportation", 0.2, "ESACB", "TNACB",
+consumption.set("transportation", new EnergySubset("transportation", 0.2, "ESACB", "TNACB",
                                                     null, null, null, null,
                                                     "CLACB", "NGASB", null, "PAACB")); // TODO CO2 "TC"
 
-// (subset key -> ElectricityPiece object)
+// (piece key -> ElectricityPiece object)
 let electricity = new Map();
 
 electricity.set("wind", new ElectricityPiece("wind", ["WND"]));
@@ -214,6 +243,16 @@ let elecImport = new ElectricityPiece("import", ["ELNIP", "ELISP"]);
 
 // Transmission efficiency (how much of electricity generated is able to be used after losses)
 let transmissionEfficiency = null;
+
+// Store CO2 IDs that are repeatedly used outside for less redundancy + overall ids and values map
+// (subset key -> CO2Subset object)
+let co2 = {"coal": "CO", "natural gas": "NG", "petroleum": "PE", map: new Map()};
+
+co2.map.set("residential", new CO2Subset("residential", "RC"));
+co2.map.set("commercial", new CO2Subset("residential", "CC"));
+co2.map.set("industrial", new CO2Subset("residential", "IC"));
+co2.map.set("transportation", new CO2Subset("residential", "TC"));
+co2.map.set("electric", new CO2Subset("electric", "EC"));
 
 // Set of primary pieces considered green
 let greenSet = new Set(["wind", "solar", "geothermal", "hydroelectric", "nuclear"]);
@@ -238,19 +277,19 @@ let GWhorGW = "GWh";
 // what abt shades of light green vs shades of brown?
 let colorMap = new Map();
 
-colorMap.set("electric", {green: d3.schemePastel2[0], ngreen: null});
+colorMap.set("electric", {"green": d3.schemePastel2[0], "ngreen": null});
 
-colorMap.set("wind", {green: d3.schemePastel2[1], ngreen: null});
-colorMap.set("solar", {green: d3.schemePastel2[2], ngreen: null});
-colorMap.set("geothermal", {green: d3.schemePastel2[3], ngreen: d3.schemeCategory10[0]});
-colorMap.set("hydroelectric", {green: d3.schemePastel2[4], ngreen: d3.schemeCategory10[1]});
-colorMap.set("nuclear", {green: d3.schemePastel2[5], ngreen: d3.schemeCategory10[2]});
+colorMap.set("wind", {"green": d3.schemePastel2[1], "ngreen": null});
+colorMap.set("solar", {"green": d3.schemePastel2[2], "ngreen": null});
+colorMap.set("geothermal", {"green": d3.schemePastel2[3], "ngreen": d3.schemeCategory10[0]});
+colorMap.set("hydroelectric", {"green": d3.schemePastel2[4], "ngreen": d3.schemeCategory10[1]});
+colorMap.set("nuclear", {"green": d3.schemePastel2[5], "ngreen": d3.schemeCategory10[2]});
 
-colorMap.set("coal", {green: null, ngreen: d3.schemeCategory10[3]});
-colorMap.set("natural gas", {green: null, ngreen: d3.schemeCategory10[4]});
-colorMap.set("petroleum", {green: null, ngreen: d3.schemeCategory10[5]});
+colorMap.set("coal", {"green": null, "ngreen": d3.schemeCategory10[3]});
+colorMap.set("natural gas", {"green": null, "ngreen": d3.schemeCategory10[4]});
+colorMap.set("petroleum", {"green": null, "ngreen": d3.schemeCategory10[5]});
 
-colorMap.set("other", {green: null, ngreen: d3.schemeCategory10[6]});
+colorMap.set("other", {"green": null, "ngreen": d3.schemeCategory10[6]});
 
 // -----------------------------------------------------
 // ---HTML Element Adjustments: ---
@@ -292,7 +331,7 @@ async function updateState() {
 
   await pullStoreData();
 
-  visualizeSectorData();
+  visualizeEnergyData();
   visualizeElectricityData();
 
   enableUserInput();
@@ -307,7 +346,7 @@ async function updateYear() {
 
   await pullStoreData();
 
-  visualizeSectorData();
+  visualizeEnergyData();
   visualizeElectricityData();
 
   enableUserInput();
@@ -341,7 +380,7 @@ function updateSectorSlider(event) {
     console.log(currType);
 
     // Store data + adjust electrification if needed (currValue may be inaccurate after preventGreenElectrification)
-    let currSubset = sectorsCons.subsetsMap.get(currSector);
+    let currSubset = consumption.get(currSector);
 
     if(currType === "electrification") {
       currSubset["adjustedElectrification"] = currValue;
@@ -357,7 +396,7 @@ function updateSectorSlider(event) {
     calculateStoreAdjustedVals(currSubset);
 
     // Print/visualize event update based on the now stored data
-    visualizeSectorData(currSector);
+    visualizeEnergyData(currSector);
     visualizeElectricityData();
 }
 
@@ -372,7 +411,7 @@ function updateElecEfficiency(event) {
     let currSector = currSectorBox.attr("class").split(" ")
         .find((element) => /sector-/.test(element)).slice(7); // locate the class pertaining to the sector name & isolate it
 
-    let currSubset = sectorsCons.subsetsMap.get(currSector);
+    let currSubset = consumption.get(currSector);
 
     // Store new  & update electrification if needed
     currSubset["elecEfficiency"] = currValue;
@@ -382,7 +421,7 @@ function updateElecEfficiency(event) {
     calculateStoreAdjustedVals(currSubset);
 
     // Visualize event update
-    visualizeSectorData(currSector);
+    visualizeEnergyData(currSector);
     visualizeElectricityData();
 }
 
@@ -438,7 +477,7 @@ async function initialize() {
 
     await pullStoreData();
 
-    visualizeSectorData();
+    visualizeEnergyData();
     visualizeElectricityData();
 
     enableUserInput();
@@ -491,7 +530,7 @@ async function initializeYears() {
     // TODO make this actually pull years info (combining the two vis's data sources to cross ref all avail years - energy, electricity, CO2)
 }
 
-// Acquire per-sector fuel consumption info for current-set state and year and store in the SectorSubsets
+// Acquire per-sector fuel consumption info for current-set state and year and store in the EnergySubsets
 // Acquire per-fuel electricity generation & imports info for current-set state and year and store in ElectricityPieces
 // NOTE: assumes user input is locked in the process; and does not unlock it (needs an outer layer function to do so)
 async function pullStoreData() {
@@ -523,13 +562,13 @@ async function pullStoreData() {
 
 // Visualize & print relevant text for the energy data contained in one or all of the four sector boxes (bar graph charts)
 // Optional argument tells it which sector to update; else, updates all four
-function visualizeSectorData(currSector = null) {
+function visualizeEnergyData(currSector = null) {
   if(currSector === null) {
-    for(let currKey of sectorsCons.subsetsMap.keys()) {
-      visualizeSectorData(currKey);
+    for(let currKey of consumption.keys()) {
+      visualizeEnergyData(currKey);
     }
   } else {
-    let currSectorObj = sectorsCons.subsetsMap.get(currSector);
+    let currSectorObj = consumption.get(currSector);
     let currPrimaryPieces = currSectorObj.subSubsets.get("primary").primaryPieces;
 
     // Print relevant slider values & outputs
@@ -570,7 +609,7 @@ function visualizeSectorData(currSector = null) {
 
     currData.push({stack: "electric", group: "electric", val: currSectorObj.subSubsets.get("electric")["adjustedVal"]}) 
     for(let currKey of currPrimaryPieces.keys()) {
-      currData.push({stack: "primary", group: currKey, val: currPrimaryPieces.get(currKey)["adjustedVal"]})
+      currData.push({"stack": "primary", "group": currKey, "val": currPrimaryPieces.get(currKey)["adjustedVal"]})
     }
 
     console.log(currData);
@@ -661,7 +700,7 @@ function visualizeElectricityData() {
 
   // Calculate & display difference between available and needed electricity (taking into account the transmission efficiency)
   let currDemand = 0;
-  for(let currSubset of sectorsCons.subsetsMap.values()) {
+  for(let currSubset of consumption.values()) {
     currDemand += currSubset.subSubsets.get("electric")["adjustedVal"];
   }
   for(let currElectricityPiece of electricity.values()) {
@@ -681,12 +720,12 @@ function visualizeElectricityData() {
     name: "Electricity Generation In " + state + " By Pieces",
     children: [
       {
-        name: "Clean Electricity",
-        children: [] 
+        "name": "Clean Electricity",
+        "children": [] 
       },
       {
-        name: "Non-Clean Electricity",
-        children: []
+        "name": "Non-Clean Electricity",
+        "children": []
       }
     ]
   }
@@ -700,9 +739,9 @@ function visualizeElectricityData() {
     }
 
     if(greenSet.has(currElectricityPiece["key"])) {
-      currJson.children[0].children.push({key: currElectricityPiece["key"], val: currElectricityPiece["adjustedVal"]});
+      currJson.children[0].children.push({"key": currElectricityPiece["key"], "val": currElectricityPiece["adjustedVal"]});
     } else {
-      currJson.children[1].children.push({key: currElectricityPiece["key"], val: currElectricityPiece["adjustedVal"]});
+      currJson.children[1].children.push({"key": currElectricityPiece["key"], "val": currElectricityPiece["adjustedVal"]});
     }
   }
 
@@ -890,7 +929,7 @@ function composeQueryString(queryType, query, stateId, start, end) {
   
     // add every ID we need to query for to the string
     if(queryType === "energy") {
-      for(let currSubset of sectorsCons.subsetsMap.values()) {
+      for(let currSubset of consumption.values()) {
         allQueryString += ("&facets[seriesId][]=" + currSubset.subSubsets.get("electric").idEnergy);
         allQueryString += ("&facets[seriesId][]=" + currSubset.subSubsets.get("total").idEnergy);
   
@@ -905,17 +944,17 @@ function composeQueryString(queryType, query, stateId, start, end) {
         }
       }
     } else if(queryType === "CO2") {
-      allQueryString += ("&facets[fuelId][]=" + sectorsCons.idAllFuelCO2);
-      allQueryString += ("&facets[sectorId][]=" + sectorsCons.idElecSectorCO2);
+      allQueryString += ("&facets[fuelId][]=" + consumption.idAllFuelCO2);
+      allQueryString += ("&facets[sectorId][]=" + consumption.idElecSectorCO2);
   
-      for(let currSubset of sectorsCons.subsetsMap.values()) {
+      for(let currSubset of consumption.values()) {
         allQueryString += ("&facets[sectorId][]=" + currSubset.subSubsets.get("primary").idSectorCO2);
       }
   
       if(query !== null) {
-        allQueryString += ("&facets[fuelId][]=" + sectorsCons.idCoalCO2);
-        allQueryString += ("&facets[fuelId][]=" + sectorsCons.idNatGasCO2);
-        allQueryString += ("&facets[fuelId][]=" + sectorsCons.idPetroleumCO2);
+        allQueryString += ("&facets[fuelId][]=" + consumption.idCoalCO2);
+        allQueryString += ("&facets[fuelId][]=" + consumption.idNatGasCO2);
+        allQueryString += ("&facets[fuelId][]=" + consumption.idPetroleumCO2);
       }
     } else if(queryType === "electricity") { 
       for(let currElectricityPiece of electricity.values()) {
@@ -943,7 +982,7 @@ function composeQueryString(queryType, query, stateId, start, end) {
 function storeSectorData(allFullsEnergy) {  
     console.log(allFullsEnergy);
     // Set all vals as 0 to avoid leftover prior values in case of data gaps
-    for(let currSubset of sectorsCons.subsetsMap.values()) {
+    for(let currSubset of consumption.values()) {
         currSubset["adjustedDemand"] = 0;
         currSubset["adjustedElectrification"] = 0;
 
@@ -981,7 +1020,7 @@ function storeSectorData(allFullsEnergy) {
         postConvert = preConvert * (1/3.412);
       }
   
-      for(let currSubset of sectorsCons.subsetsMap.values()) {
+      for(let currSubset of consumption.values()) {
         for(let currSubSubset of currSubset.subSubsets.values()) {
           if(currSubSubset["idEnergy"] === currFullEnergy["seriesId"]) {
             // store converted val in currSubSubset
@@ -1010,7 +1049,7 @@ function storeSectorData(allFullsEnergy) {
         throw new Error("Unexpected unit or state ID mismatch in pulled API data with " + currFullCO2 + " units " + currFullCO2["value-units"]);
       }
   
-      if(currFullCO2.sectorId === sectorsCons.idElecSectorCO2 && currFullCO2.fuelId === sectorsCons.idAllFuelCO2) {
+      if(currFullCO2.sectorId === consumption.idElecSectorCO2 && currFullCO2.fuelId === consumption.idAllFuelCO2) {
         // if this is the electric sector val, it needs to be split proportionally & stored in all the elecSector sub-subsets in pieces
   
         let postConvert;
@@ -1021,10 +1060,10 @@ function storeSectorData(allFullsEnergy) {
           postConvert = parseFloat(currFullCO2.value);
         }
   
-        let residentialElec = sectorsCons.subsetsMap.get("residential").subSubsets.get("elecSector");
-        let commercialElec = sectorsCons.subsetsMap.get("commercial").subSubsets.get("elecSector");
-        let industrialElec = sectorsCons.subsetsMap.get("industrial").subSubsets.get("elecSector");
-        let transportationElec = sectorsCons.subsetsMap.get("transportation").subSubsets.get("elecSector");
+        let residentialElec = consumption.get("residential").subSubsets.get("elecSector");
+        let commercialElec = consumption.get("commercial").subSubsets.get("elecSector");
+        let industrialElec = consumption.get("industrial").subSubsets.get("elecSector");
+        let transportationElec = consumption.get("transportation").subSubsets.get("elecSector");
         
         if(stateOrUS === "state") {
           let electricTotal = commercialElec.valState + industrialElec.valState + transportationElec.valState + residentialElec.valState;
@@ -1042,7 +1081,7 @@ function storeSectorData(allFullsEnergy) {
           transportationElec.co2US = postConvert * (transportationElec.valUS/electricTotal);
         }
       } else { // not EC, so a primary sector's val or primary piece val, find the corresponding sector & its primary sub subset or that sub subset's correct piece
-        for(let currSubset of sectorsCons.subsetsMap.values()) {
+        for(let currSubset of consumption.values()) {
           for(let currSubSubset of currSubset.subSubsets.values()) {
             if(currSubSubset.idSectorCO2 === currFullCO2.sectorId) {
   
@@ -1053,15 +1092,15 @@ function storeSectorData(allFullsEnergy) {
                 postConvert = parseFloat(currFullCO2.value);
               }
   
-              if(currFullCO2.fuelId === sectorsCons.idAllFuelCO2) { // CO2 of all fuels for this sector  
+              if(currFullCO2.fuelId === consumption.idAllFuelCO2) { // CO2 of all fuels for this sector  
                 // store read-in val in currSubSubset
                 currSubSubset[accessCO2] = postConvert;
               } else { // CO2 of some primary piece of fuel for this sector
-                if(currFullCO2.fuelId === sectorsCons.idCoalCO2) {
+                if(currFullCO2.fuelId === consumption.idCoalCO2) {
                   currSubSubset.primaryPieces.get("coal")[accessCO2] = postConvert;
-                } else if (currFullCO2.fuelId === sectorsCons.idNatGasCO2) {
+                } else if (currFullCO2.fuelId === consumption.idNatGasCO2) {
                   currSubSubset.primaryPieces.get("natural gas")[accessCO2] = postConvert;
-                } else if (currFullCO2.fuelId === sectorsCons.idPetroleumCO2) {
+                } else if (currFullCO2.fuelId === consumption.idPetroleumCO2) {
                   currSubSubset.primaryPieces.get("petroleum")[accessCO2] = postConvert;
                 }
               }
@@ -1075,7 +1114,7 @@ function storeSectorData(allFullsEnergy) {
     // sum and store the CO2 totals per sector as well (not directly pullable due to our proportioning of electric sector) (TODO)
     // & derive the primary values and primary pieces inner totals,"other" (leftover of what was pulled), and electrification %
     // & set adjusted pieces to start at base
-    for(let currSubset of sectorsCons.subsetsMap.values()) {
+    for(let currSubset of consumption.values()) {
         /*
       currSubset.subSubsets.get("total")[accessCO2] = currSubset.subSubsets.get("elecSector")[accessCO2] + currSubset.subSubsets.get("primary")[accessCO2];
       */
@@ -1194,7 +1233,7 @@ function storeElectricityData(allFullsElecGen, allFullsImport) {
   currElectricitySum += elecImport["adjustedVal"];
 
   let currElecUseSum = 0;
-  for(let currSubset of sectorsCons.subsetsMap.values()) {
+  for(let currSubset of consumption.values()) {
     currElecUseSum += currSubset.subSubsets.get("electric")["adjustedVal"];
   }
   
@@ -1205,7 +1244,7 @@ function storeElectricityData(allFullsElecGen, allFullsImport) {
 // The min amount of primaries that can be left unelectrified is the green primaries: if the electrification % goes too high (or elecEfficiency changes 
 // the max electrification %), it will be checked & reduced to its max value by the below, for some key of some currSubset. 
 function preventGreenElectrification(currSector) {
-    let currSubset = sectorsCons.subsetsMap.get(currSector);
+    let currSubset = consumption.get(currSector);
 
     // Because of electric efficiency factors, the calculation is not a plain ratio, rather:
     // 1 - max electrification % = green primaries base sum / total adjusted sum = 
