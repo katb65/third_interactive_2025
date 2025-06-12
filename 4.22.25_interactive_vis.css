@@ -1,4 +1,8 @@
-.grid {
+.container {
+    display: inline-block;
+}
+
+.energy {
     display: grid;
     grid-template-columns: 300px 300px;
     grid-template-rows: 300px 300px;
@@ -19,12 +23,12 @@
     display: inline;
 }
 
-.cell .vis-container {
+.energy .vis-container {
     width: 300px; 
     height: 150px;
 }
 
-.cell .vis {
+.energy .vis {
     width: 300px; 
     height: 150px;
 }
@@ -37,4 +41,14 @@
 .electricity .vis {
     width: 250px;
     height: 300px;
+}
+
+.co2 .vis-container {
+    width: 300px;
+    height: 1000px;
+}
+
+.co2 .vis {
+    width: 300px;
+    height: 1000px;
 }

@@ -404,7 +404,8 @@ function updateSectorSlider(event) {
 
     // Propagate event consequences from now stored adjustedDemand or adjustedElectrification through all subSubsets/pieces' adjustedVals
     // TODO more once CO2, electric breakdown
-    calculateStoreAdjustedVals(currSubset);
+    calculateStoreAdjustedVals(currSector);
+    calculateStoreAdjustedCO2(currSector);
 
     // Print/visualize event update based on the now stored data
     visualizeEnergyData(currSector);
@@ -430,7 +431,7 @@ function updateElecEfficiency(event) {
     preventGreenElectrification(currSector);
 
     // Update data to reflect it (propagate effects)
-    calculateStoreAdjustedVals(currSubset);
+    calculateStoreAdjustedVals(currSector);
 
     // Visualize event update
     visualizeEnergyData(currSector);
@@ -457,6 +458,9 @@ function updateElectricity(event) {
       let currElectricityPiece = electricity.get(currJSKey);
       currElectricityPiece["adjustedVal"] = currValue;
     }
+
+    // Propagate effects
+    calculateStoreAdjustedCO2("electric");
 
     // Visualize event update
     visualizeElectricityData();
@@ -548,32 +552,24 @@ async function initializeYears() {
 // Acquire per-fuel electricity generation & imports info for current-set state and year and store in ElectricityPieces
 // NOTE: assumes user input is locked in the process; and does not unlock it (needs an outer layer function to do so)
 async function pullStoreData() {
-    // pull entire API call at once per EIA browser type, then go through values and sift them into the corresponding object spaces
-    // then check that it approx. sums to total for each one, and throw error if not
+    // pull entire API call at once per object type, then go through values and sift them into the corresponding object spaces
+    // for energy, due to convolution, also check that it sums to total at end, and throw error if not
   
     // query for query strings & await Promise resolution
     let allFullsEnergyPromise = d3.json(composeQueryString("energy", "value", state, (year-1), (year+1)));
-    //let allFullsCO2Promise = d3.json(composeQueryString("CO2", "value", state, (year-1), (year+1)));
     let allFullsElectricityPromise = d3.json(composeQueryString("electricity", "generation", state, (year-1), (year+1)))
     let allFullsImportPromise = d3.json(composeQueryString("import", "value", state, (year-1), (year+1)));
-    let allFullsCO2Promise = d3.json(composeQueryString("CO2", "value", "US", (year-1), (year+1)));
+    let allFullsCO2Promise = d3.json(composeQueryString("CO2", "value", state, (year-1), (year+1)));
     
     let allFullsEnergy = await allFullsEnergyPromise;
-    //let allFullsCO2 = await allFullsCO2Promise;
     let allFullsElectricity = await allFullsElectricityPromise;
     let allFullsImport = await allFullsImportPromise;
     let allFullsCO2 = await allFullsCO2Promise;
-
-    console.log(allFullsCO2);
-    
   
-    storeSectorData(allFullsEnergy); // TODO later pass allFullsCO2 to store also
+    storeSectorData(allFullsEnergy);
     storeElectricityData(allFullsElectricity, allFullsImport);
     storeCO2Data(allFullsCO2);
 
-    // TODO imports of elec? will need to remark on limitation of getting the env. impacts of this as well (CO2 pull is very limited)
-  
-  
     //checkTotalParts();
 }
 
@@ -732,7 +728,7 @@ function visualizeElectricityData() {
   }
 
   // Visualize
-  
+  // Set up JSON object of values to visualize
   var currJson = {
     name: "Electricity Generation In " + state + " By Pieces",
     children: [
@@ -747,7 +743,6 @@ function visualizeElectricityData() {
     ]
   }
 
-  // Set up JSON object of values to visualize
   for(let currElectricityPiece of electricity.values()) {
     // Don't add the 0-gen pieces to the vis, they only make it rearrange when not necessary
     // Also don't add the negatives (there aren't any big ones & negatives can't be visualized here)
@@ -794,7 +789,55 @@ function visualizeElectricityData() {
 }
 
 // Visualize & print relevant text for the CO2 output
+// TODO: print text!
 function visualizeCO2Data() {
+  var currJson = {
+    name: "CO2 Emissions In " + state + " By Sector & Pieces",
+    children: [{children: []}] // double wrapped to circumvent d3's treemap layout horizontal/vertical ordering
+  }
+
+  for(let currSubset of co2.map.values()) {
+    let currPush = {"sector": currSubset["key"], "children": []};
+    for(let currCO2Piece of currSubset.co2Pieces.values()) {
+      currPush.children.push({"key": currCO2Piece["key"], "val": currCO2Piece["adjustedVal"]});
+    }
+
+    currJson.children[0].children.push(currPush);
+  }
+  
+  var currHierarchy = d3.hierarchy(currJson) // adds depth, height, parent to the data
+                        .sum(d=>d["val"])
+                        .sort((a,b) => b["val"] - a["val"]); // sort in descending order
+
+                          // Set up the dimensions of a treemap, then pass the data to it
+  var currTreemap = d3.treemap()
+  .tile(d3.treemapSliceDice) // make the subsections in logs rather than jumbled
+  .size([d3.select(".co2 .vis").style("width").slice(0, -2), d3.select(".co2 .vis").style("height").slice(0, -2)])
+  .padding(1);
+  var currRoot = currTreemap(currHierarchy); // determines & assigns x0, x1, y0, & y1 attrs for the data
+
+  // Now we can make rect elements of these nodes & append them to an svg element on the screen
+  var svgVis = d3.select(".co2 .vis");
+
+  svgVis.selectAll("rect") // by the D3 update pattern it creates new rects upon the "join()" call
+    .data(currRoot.leaves().filter(d=>d.depth == 3))
+    .join("rect")
+    .attr("x", d=>d.x0)
+    .attr("y", d=>d.y0)
+    .attr("width", d=>d.x1-d.x0)
+    .attr("height", d=>d.y1-d.y0)
+    .attr("fill", (d) => {
+        if(greenSet.has(d.data.key)) {
+          return colorMap.get(d.data.key)["green"];
+        } else {
+          return colorMap.get(d.data.key)["ngreen"];
+        }
+    });
+
+
+
+
+
   console.log("CO2");
   for(let currSubset of co2.map.values()) {
     console.log("");
@@ -855,7 +898,9 @@ function enableUserInput() {
 // adjustedDemand and adjustedElectrification
 // TODO: if adjusted values are close to 0 it should probably just make them 0... (as in, things like 1e-11 or something, rounding errors) - espc
 // because some are below 0, which errors out the visualizer
-function calculateStoreAdjustedVals(currSubset) {
+function calculateStoreAdjustedVals(currSector) {
+    let currSubset = consumption.get(currSector);
+
     // from base val & electrification, we first scale the val by demand percent, then shift pieces to fit the electrification percent
     let scaledPrimary = (currSubset.subSubsets.get("primary")["baseVal"] * (currSubset["adjustedDemand"] / 100));
     let scaledElectric = (currSubset.subSubsets.get("electric")["baseVal"] * (currSubset["adjustedDemand"] / 100));
@@ -916,6 +961,22 @@ function calculateStoreAdjustedVals(currSubset) {
     for(let currPrimaryPiece of currSubset.subSubsets.get("primary").primaryPieces.values()) {
       console.log(currPrimaryPiece.key + " " + currPrimaryPiece["adjustedVal"]);
     }
+}
+
+// For updateSectorSlider(), updateElecEfficiency()
+// Calculates & store the current adjustedVals for the CO2 of passed in sector or electric, based on the current
+// energy & electricity maps
+// TODO also round 0 ish vals? As per the above to do
+function calculateStoreAdjustedCO2(currSector) {
+  let currSubset = co2.map.get(currSector);
+  for(let currCO2Piece of currSubset.co2Pieces.values()) {
+    if(currSector === "electric") {
+      currCO2Piece["adjustedVal"] = currCO2Piece["factor"] * electricity.get(currCO2Piece["key"])["adjustedVal"];
+    } else {
+      currCO2Piece["adjustedVal"] = currCO2Piece["factor"] * consumption.get(currSector).subSubsets.get("primary")
+                                    .primaryPieces.get(currCO2Piece["key"])["adjustedVal"];
+    }
+  }
 }
 
 // For initializeYears(), pullStoreData()
@@ -1114,6 +1175,7 @@ function storeElectricityData(allFullsElecGen, allFullsImport) {
   }
   elecImport["baseVal"] = 0;
   elecImport["adjustedVal"] = 0;
+  transmissionEfficiency = 0;
   
   // Isolate pulled pieces + store
   for(let currFullElecGen of allFullsElecGen.response.data) {
@@ -1194,14 +1256,25 @@ function storeElectricityData(allFullsElecGen, allFullsImport) {
 // For pullStoreData()
 // Dissects & stores EIA API response data for in the CO2 values map for the current-set year & state
 // If no data for some value, assumes it 0
-// NOTE: assumes energy & electricity data to be stored, used to calculate CO2 ratios
+// NOTE: assumes energy & electricity data to be stored, used to calculate CO2 factors
 function storeCO2Data(allFullsCO2) {
+  
+  // Set all vals as 0 to avoid leftover prior values in case of data gaps
+  for(let currSubset of co2.map.values()) {
+    for(let currCO2Piece of currSubset.co2Pieces.values()) {
+      currCO2Piece["baseVal"] = 0;
+      currCO2Piece["adjustedVal"] = 0;
+      currCO2Piece["factor"] = 0;
+    }
+  }
+
   for(let currFullCO2 of allFullsCO2.response.data) {
     if(parseInt(currFullCO2["period"]) != year) {
       continue; // we fetched several years near current year due to variable API mechanics, so cycle past irrelevant ones
     }
 
     if(currFullCO2["value-units"] !== "million metric tons of CO2" || currFullCO2["stateId"] !== state) { // year & sector ID already checked
+      console.log(currFullCO2["stateId"]);
       throw new Error("Unexpected unit or state ID mismatch in pulled API data with " + currFullCO2 + " units " + currFullCO2["value-units"]);
     }
 
@@ -1221,9 +1294,22 @@ function storeCO2Data(allFullsCO2) {
     }
   }
 
-  // Set adjusted vals to start at base
+  // Calculate factors & set adjusted vals to start at base
   for(let currSubset of co2.map.values()) {
     for(let currCO2Piece of currSubset.co2Pieces.values()) {
+      if(currSubset["key"] === "electric") {
+        currCO2Piece["factor"] = currCO2Piece["baseVal"] / electricity.get(currCO2Piece["key"])["baseVal"];
+      } else {
+        currCO2Piece["factor"] = currCO2Piece["baseVal"] / consumption.get(currSubset["key"]).subSubsets.get("primary")
+                                                          .primaryPieces.get(currCO2Piece["key"])["baseVal"];
+      }
+      if(currCO2Piece["factor"] === NaN) {
+        currCO2Piece["factor"] = 0;
+      }
+      //TODO atp it stores 0 as factor if that's what it is calculated as or if NaN aka divided by 0 generation/use... what if user increases one subset use that wasn't there before?
+      // but also how would they do that...
+      console.log(currCO2Piece["factor"]);
+
       currCO2Piece["adjustedVal"] = currCO2Piece["baseVal"];
     }
   }
