@@ -210,18 +210,18 @@ let consumption = new Map();
 // we must subtract electric to get it
 consumption.set("residential", new EnergySubset("residential", 0.2, "ESRCB", "TNRCB",
                                                   null, "SORCB", "GERCB", null,
-                                                  "CLRCB", "NGRCB", "SFRCB", "PARCB")); // TODO CO2? "RC"
+                                                  "CLRCB", "NGRCB", "SFRCB", "PARCB")); 
 consumption.set("commercial", new EnergySubset("commercial", 0.2, "ESCCB", "TNCCB",
                                                 "WYCCB", "SOCCB", "GECCB", "HYCCB",
-                                                "CLCCB", "NGCCB", "SFCCB", "PACCB")); // TODO CO2 "CC"
+                                                "CLCCB", "NGCCB", "SFCCB", "PACCB"));
 // the ID is slightly different for industrial electricity than the others: it's "excluding refinery use" - hence "ESISB", not "ESICB" (the latter doesn't add up)
 consumption.set("industrial", new EnergySubset("industrial", 0.82, "ESISB", "TNICB",
                                                 "WYICB", "SOICB", "GEICB", "HYICB",
-                                                "CLICB", "NGICB", "SFINB", "PAICB")); // TODO CO2 "IC"
+                                                "CLICB", "NGICB", "SFINB", "PAICB")); 
 // NGASB not NGACB for transportation's natural gas (there's no supplemental fuels to subtract out by ID here)
 consumption.set("transportation", new EnergySubset("transportation", 0.2, "ESACB", "TNACB",
                                                     null, null, null, null,
-                                                    "CLACB", "NGASB", null, "PAACB")); // TODO CO2 "TC"
+                                                    "CLACB", "NGASB", null, "PAACB")); 
 
 // (piece key -> ElectricityPiece object)
 let electricity = new Map();
@@ -531,6 +531,121 @@ function initializeStateSelect() {
 // + set initial year
 // NOTE: assumes user input is locked in the process; and does not unlock it (needs an outer layer function to do so)
 async function initializeYears() {
+  // can't use metadata: it gives only full date range (largest range), not range when all vals needed are available
+
+  // count large-scale ids (4*2 for energy, 13 for electricity (variously dispersed), 1*2 for imports, 5 + 3 for CO2)
+  let idCount = 0;
+  idCount += consumption.size * 2;
+  for(let currElecPiece of electricity.values()) {
+    idCount += currElecPiece.ids.length;
+  }
+  idCount += elecImport.ids.length;
+  idCount += co2.map.size; // CO2 ids overlap oddly hence the plus not multiply
+  idCount += co2.ids.size;
+  console.log("idCount " + idCount);
+
+  allYearFullsEnergyPromise = d3.json(composeQueryString("energy", null, "US", null, null));
+  allYearFullsElectricityPromise = d3.json(composeQueryString("electricity", null, "US", null, null));
+  allYearFullsImportPromise = d3.json(composeQueryString("import", null, "US", null, null));
+  allYearFullsCO2Promise = d3.json(composeQueryString("CO2", null, "US", null, null));
+
+  allYearFullsEnergy = await allYearFullsEnergyPromise;
+  allYearFullsElectricity = await allYearFullsElectricityPromise;
+  allYearFullsImport = await allYearFullsImportPromise;
+  allYearFullsCO2 = await allYearFullsCO2Promise;
+
+  yearsContained = new Map();
+
+  // map each year to the series ids that have values for it
+  for(let currFull of allYearFullsEnergy.response.data) {
+    let currYear = parseInt(currFull["period"]);
+
+    if(!yearsContained.has(currYear)) {
+      yearsContained.set(currYear, {"energy": new Set()}); // must be separate since some IDs overlap
+    }
+
+    yearsContained.get(currYear)["energy"].add(currFull["seriesId"]);
+  }
+  for(let currFull of allYearFullsElectricity.response.data) {
+    let currYear = parseInt(currFull["period"]);
+
+    // if year not contained yet in map, already know it's not in the energy pull, so it'd be eliminated
+    // at the end anyway
+    if(yearsContained.has(currYear)) {
+      if(!("electricity" in yearsContained.get(currYear))) {
+        yearsContained.get(currYear)["electricity"] = new Set();
+      }
+      yearsContained.get(currYear)["electricity"].add(currFull["fueltypeid"]);
+    }
+  }
+  for(let currFull of allYearFullsImport.response.data) {
+    let currYear = parseInt(currFull["period"]);
+
+    if(yearsContained.has(currYear)) {
+      if(!("import" in yearsContained.get(currYear))) {
+        yearsContained.get(currYear)["import"] = new Set();
+      }
+      yearsContained.get(currYear)["import"].add(currFull["seriesId"]);
+    }
+  }
+  for(let currFull of allYearFullsCO2.response.data) {
+    let currYear = parseInt(currFull["period"]);
+
+    if(yearsContained.has(currYear)) {
+      if(!("co2" in yearsContained.get(currYear))) {
+        yearsContained.get(currYear)["co2"] = new Set();
+      }
+      yearsContained.get(currYear)["co2"].add(currFull["fuelId"]);
+      yearsContained.get(currYear)["co2"].add(currFull["sectorId"]);
+    }
+  }
+
+  // only add to options those years which have values for all ids queried
+  let years = [];
+  for(let currYear of yearsContained.keys()) {
+    let currSize = 0;
+    for(let currSet of Object.values(yearsContained.get(currYear))) {
+      currSize += currSet.size;
+    }
+    console.log(currYear);
+    console.log(currSize);
+    if(currSize == idCount) {
+      years.push(currYear);
+    }
+  }
+
+  // initialize the HTML element with available years
+  let yearSelectDrop = d3.select("#year-select-drop");
+
+  yearSelectDrop.selectAll("option")
+  .data(years)
+  .join("option")
+  .property("value", d=>d)
+  .text(d=>d);
+
+  year = years[0]; // will be latest year, due to sorting of request & JavaScript map key ordering mechanics
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
     let years = [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022];
 
     // initialize the HTML element with available years
@@ -546,6 +661,7 @@ async function initializeYears() {
     // TODO ^ WILL be latest year once I pull them
 
     // TODO make this actually pull years info (combining the two vis's data sources to cross ref all avail years - energy, electricity, CO2)
+    */
 }
 
 // Acquire per-sector fuel consumption info for current-set state and year and store in the EnergySubsets
@@ -689,6 +805,7 @@ function visualizeEnergyData(currSector = null) {
 
 // Visualize & print relevant text for the electricity generation & import data contained at the bottom
 function visualizeElectricityData() {
+  // TODO don't visualize import ( I already don't ) but then...
   // TODO visualize as treemap (colors? same as other? brown vs green? cross-mapping upon switch? ...)
   // pastel1 vs dark2?
   // also align the groups that elec gen vs primaries are defined by (see: issue with other/biomass/petroleum) after this works
@@ -791,6 +908,16 @@ function visualizeElectricityData() {
 // Visualize & print relevant text for the CO2 output
 // TODO: print text!
 function visualizeCO2Data() {
+  // Print
+  let currCO2Total = 0;
+  for(let currSubset of co2.map.values()) {
+    for(let currCO2Piece of currSubset.co2Pieces.values()) {
+      currCO2Total += currCO2Piece["adjustedVal"];
+    }
+  }
+  //TODO output
+
+  // Visualize
   var currJson = {
     name: "CO2 Emissions In " + state + " By Sector & Pieces",
     children: [{children: []}] // double wrapped to circumvent d3's treemap layout horizontal/vertical ordering
@@ -1127,10 +1254,7 @@ function storeSectorData(allFullsEnergy) {
     // derive the primary values and primary pieces inner totals, "other" (leftover of what was pulled), and electrification %
     // & set adjusted pieces to start at base
     for(let currSubset of consumption.values()) {
-        /*
-      currSubset.subSubsets.get("total")[accessCO2] = currSubset.subSubsets.get("elecSector")[accessCO2] + currSubset.subSubsets.get("primary")[accessCO2];
-      */
-  
+
       let currPrimary = currSubset.subSubsets.get("primary");
       currPrimary["baseVal"] = currSubset.subSubsets.get("total")["baseVal"] - currSubset.subSubsets.get("electric")["baseVal"]; // calculate primary
       currPrimary.primaryPieces.get("other")["baseVal"] = currPrimary["baseVal"]; // start other's val with primary total val
@@ -1226,6 +1350,21 @@ function storeElectricityData(allFullsElecGen, allFullsImport) {
     }
   }
 
+  // Transmission efficiency
+  let currElectricitySum = 0;
+  for(let currElectricityPiece of electricity.values()) {
+    currElectricitySum += currElectricityPiece["baseVal"];
+  }
+  currElectricitySum += elecImport["baseVal"];
+
+  let currElecUseSum = 0;
+  for(let currSubset of consumption.values()) {
+    currElecUseSum += currSubset.subSubsets.get("electric")["baseVal"];
+  }
+  
+  transmissionEfficiency = currElecUseSum / currElectricitySum; // TODO in hawaii this is 1.04... catch the issue... set to 1? maybe off grid
+  // generation but is recorded as consumption. maybe some pricing approximation. okay since it'll be in advanced just leave it as 1.04 but give a disclaimer
+
   // Set adjusted vals to start at base
   for(let currElectricityPiece of electricity.values()) {
     currElectricityPiece["adjustedVal"] = currElectricityPiece["baseVal"];
@@ -1237,20 +1376,6 @@ function storeElectricityData(allFullsElecGen, allFullsImport) {
     console.log(currElectricityPiece["key"] + " " + currElectricityPiece["baseVal"]);
   }
   console.log("import " + elecImport["adjustedVal"]);
-
-  // Transmission efficiency
-  let currElectricitySum = 0;
-  for(let currElectricityPiece of electricity.values()) {
-    currElectricitySum += currElectricityPiece["adjustedVal"];
-  }
-  currElectricitySum += elecImport["adjustedVal"];
-
-  let currElecUseSum = 0;
-  for(let currSubset of consumption.values()) {
-    currElecUseSum += currSubset.subSubsets.get("electric")["adjustedVal"];
-  }
-  
-  transmissionEfficiency = currElecUseSum / currElectricitySum;
 }
 
 // For pullStoreData()
