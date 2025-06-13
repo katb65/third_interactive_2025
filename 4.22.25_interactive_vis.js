@@ -98,7 +98,8 @@ class EnergySubset {
     // Base demand can be found in the "total" subSubset baseVal; 
     // Base electrification can be calculated by "electric" divided by "total" baseVal
 
-    elecEfficiency; // for this sector, proportion of electricity needed to primary energy to accomplish same tasks (due to certain heat/power savings)
+    baseElecEfficiency; // for this sector, proportion of electricity needed to primary energy to accomplish same tasks (due to certain heat/power savings)
+    adjustedElecEfficiency;
 
     // The values the user has moved to on the sliders for this sector
     adjustedDemand; // % of base demand (since GWh will vary by electrification due to efficiency factors)
@@ -112,7 +113,8 @@ class EnergySubset {
         idCoal, idNatGas, idSuppGas, idPetroleum) {
 
         this.key = key;
-        this.elecEfficiency = elecEfficiency;
+        this.baseElecEfficiency = elecEfficiency;
+        this.adjustedElecEfficiency = this.baseElecEfficiency;
 
         this.adjustedDemand = null;
         this.adjustedElectrification = null;
@@ -427,15 +429,17 @@ function updateElecEfficiency(event) {
     let currSubset = consumption.get(currSector);
 
     // Store new  & update electrification if needed
-    currSubset["elecEfficiency"] = currValue;
+    currSubset["adjustedElecEfficiency"] = currValue;
     preventGreenElectrification(currSector);
 
     // Update data to reflect it (propagate effects)
     calculateStoreAdjustedVals(currSector);
+    calculateStoreAdjustedCO2(currSector);
 
     // Visualize event update
     visualizeEnergyData(currSector);
     visualizeElectricityData();
+    visualizeCO2Data();
 }
 
 // Called on user changing some piece of electricity generation or import quantity
@@ -542,7 +546,6 @@ async function initializeYears() {
   idCount += elecImport.ids.length;
   idCount += co2.map.size; // CO2 ids overlap oddly hence the plus not multiply
   idCount += co2.ids.size;
-  console.log("idCount " + idCount);
 
   allYearFullsEnergyPromise = d3.json(composeQueryString("energy", null, "US", null, null));
   allYearFullsElectricityPromise = d3.json(composeQueryString("electricity", null, "US", null, null));
@@ -607,8 +610,6 @@ async function initializeYears() {
     for(let currSet of Object.values(yearsContained.get(currYear))) {
       currSize += currSet.size;
     }
-    console.log(currYear);
-    console.log(currSize);
     if(currSize == idCount) {
       years.push(currYear);
     }
@@ -624,44 +625,6 @@ async function initializeYears() {
   .text(d=>d);
 
   year = years[0]; // will be latest year, due to sorting of request & JavaScript map key ordering mechanics
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*
-    let years = [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022];
-
-    // initialize the HTML element with available years
-    let yearSelectDrop = d3.select("#year-select-drop");
-
-    yearSelectDrop.selectAll("option")
-    .data(years)
-    .join("option")
-    .property("value", d=>d)
-    .text(d=>d);
-
-    year = 2010; // will be latest year, due to sorting of request & JavaScript map key ordering mechanics
-    // TODO ^ WILL be latest year once I pull them
-
-    // TODO make this actually pull years info (combining the two vis's data sources to cross ref all avail years - energy, electricity, CO2)
-    */
 }
 
 // Acquire per-sector fuel consumption info for current-set state and year and store in the EnergySubsets
@@ -703,8 +666,8 @@ function visualizeEnergyData(currSector = null) {
     // Print relevant slider values & outputs
     let currSectorBox = d3.select(".cell.sector-" + currSector);
 
-    currSectorBox.select(".type-elec-efficiency > .slider").property("value", currSectorObj["elecEfficiency"]);
-    currSectorBox.select(".type-elec-efficiency > .slider-output").text(formatCommas(currSectorObj["elecEfficiency"]));
+    currSectorBox.select(".type-elec-efficiency > .slider").property("value", currSectorObj["adjustedElecEfficiency"]);
+    currSectorBox.select(".type-elec-efficiency > .slider-output").text(formatCommas(currSectorObj["adjustedElecEfficiency"]));
 
     currSectorBox.select(".type-demand > .slider").property("value", currSectorObj["adjustedDemand"]);
     currSectorBox.select(".type-demand > .slider-output").text(formatCommas(currSectorObj["adjustedDemand"]) + "%");
@@ -906,16 +869,18 @@ function visualizeElectricityData() {
 }
 
 // Visualize & print relevant text for the CO2 output
-// TODO: print text!
 function visualizeCO2Data() {
   // Print
   let currCO2Total = 0;
+  console.log("co2 totaling:");
   for(let currSubset of co2.map.values()) {
+    console.log(currCO2Total);
+    console.log(currSubset);
     for(let currCO2Piece of currSubset.co2Pieces.values()) {
       currCO2Total += currCO2Piece["adjustedVal"];
     }
   }
-  //TODO output
+  d3.select(".co2 .subheader").text("CO2: " + formatCommas(currCO2Total) + " Million Metric Tons");
 
   // Visualize
   var currJson = {
@@ -1038,10 +1003,10 @@ function calculateStoreAdjustedVals(currSector) {
     // x = (new%*(scaledPrimary + scaledElectric) - scaledElectric)/(eff - new%*eff + new%)
 
     let toMove = ((currSubset["adjustedElectrification"] / 100) * (scaledPrimary + scaledElectric) - scaledElectric) / 
-      (currSubset["elecEfficiency"] - (currSubset["adjustedElectrification"] / 100)*currSubset["elecEfficiency"] + (currSubset["adjustedElectrification"] / 100));
+      (currSubset["adjustedElecEfficiency"] - (currSubset["adjustedElectrification"] / 100)*currSubset["adjustedElecEfficiency"] + (currSubset["adjustedElectrification"] / 100));
 
     currSubset.subSubsets.get("primary")["adjustedVal"] = scaledPrimary - toMove;
-    currSubset.subSubsets.get("electric")["adjustedVal"] = scaledElectric + (toMove * currSubset["elecEfficiency"]);
+    currSubset.subSubsets.get("electric")["adjustedVal"] = scaledElectric + (toMove * currSubset["adjustedElecEfficiency"]);
     currSubset.subSubsets.get("total")["adjustedVal"] = currSubset.subSubsets.get("primary")["adjustedVal"] + currSubset.subSubsets.get("electric")["adjustedVal"];
 
     /*
@@ -1069,14 +1034,6 @@ function calculateStoreAdjustedVals(currSector) {
           - (toMove * (currPrimaryPiece["baseVal"]/(currSubset.subSubsets.get("primary")["baseVal"] - greenSumBase)));
       }
     }
-
-    /* TODO remove old calculation not considering green vs ngreen
-    for(let currPrimaryPiece of currSubset.subSubsets.get("primary").primaryPieces.values()) {
-      if(currPrimaryPiece["key"])
-      currPrimaryPiece["adjustedVal"] = currSubset.subSubsets.get("primary")["adjustedVal"] * 
-        (currPrimaryPiece["baseVal"] / currSubset.subSubsets.get("primary")["baseVal"]);
-    }
-        */
 
     console.log(currSubset.key + "----------");
     console.log("adjustedDemand " + currSubset["adjustedDemand"]);
@@ -1194,10 +1151,11 @@ function composeQueryString(queryType, query, stateId, start, end) {
 // If no data for some value, assumes it 0
 function storeSectorData(allFullsEnergy) {  
     console.log(allFullsEnergy);
-    // Set all vals as 0 to avoid leftover prior values in case of data gaps
+    // Set all vals as 0 to avoid leftover prior values in case of data gaps + adjustedElecEfficiency back to its base val
     for(let currSubset of consumption.values()) {
         currSubset["adjustedDemand"] = 0;
         currSubset["adjustedElectrification"] = 0;
+        currSubset["adjustedElecEfficiency"] = currSubset["baseElecEfficiency"];
 
         for(let currSubSubset of currSubset.subSubsets.values()) {
             currSubSubset["baseVal"] = 0;
@@ -1428,7 +1386,7 @@ function storeCO2Data(allFullsCO2) {
         currCO2Piece["factor"] = currCO2Piece["baseVal"] / consumption.get(currSubset["key"]).subSubsets.get("primary")
                                                           .primaryPieces.get(currCO2Piece["key"])["baseVal"];
       }
-      if(currCO2Piece["factor"] === NaN) {
+      if(isNaN(currCO2Piece["factor"])) {
         currCO2Piece["factor"] = 0;
       }
       //TODO atp it stores 0 as factor if that's what it is calculated as or if NaN aka divided by 0 generation/use... what if user increases one subset use that wasn't there before?
@@ -1515,7 +1473,7 @@ function storeCO2Data(allFullsCO2) {
 }
 
 // For updateSectorSlider(), updateElecEfficiency()
-// The min amount of primaries that can be left unelectrified is the green primaries: if the electrification % goes too high (or elecEfficiency changes 
+// The min amount of primaries that can be left unelectrified is the green primaries: if the electrification % goes too high (or adjustedElecEfficiency changes 
 // the max electrification %), it will be checked & reduced to its max value by the below, for some key of some currSubset. 
 function preventGreenElectrification(currSector) {
     let currSubset = consumption.get(currSector);
@@ -1536,7 +1494,7 @@ function preventGreenElectrification(currSector) {
 
     let ngreenSumBase = currSubset.subSubsets.get("primary")["baseVal"] - greenSumBase;
     let maxElectrification = 100 * (1 - greenSumBase/(currSubset.subSubsets.get("primary")["baseVal"] - ngreenSumBase 
-      + currSubset.subSubsets.get("electric")["baseVal"] + ngreenSumBase * currSubset["elecEfficiency"]));
+      + currSubset.subSubsets.get("electric")["baseVal"] + ngreenSumBase * currSubset["adjustedElecEfficiency"]));
 
     if(currSubset["adjustedElectrification"] > maxElectrification) {
       currSubset["adjustedElectrification"] = maxElectrification;
