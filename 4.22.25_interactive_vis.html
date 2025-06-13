@@ -47,13 +47,13 @@
                     <!-- TODO add text input box for precision? will need to filter out non numeric input + trigger slider event -->
                     <!-- TODO blurbs saying demand % inc's efffactor (by amt of things using it) whereas electrification % doesn't (by GWh)-->
                     <p> 0% </p>
-                    <input  class = "slider" type="range" min = "0" max = "500" value = "100" step = "0.1" disabled></input>
+                    <input  class = "slider" type="range" min = "0" max = "500" value = "100" step = "1" disabled></input>
                     <p> 500% &nbsp;&nbsp;&nbsp; </p>
                     <p class = "slider-output"> </p>
                 </div>
                 <div class="input-container type-electrification">
                     <p> 0% </p>
-                    <input class = "slider"  type="range" min = "0" max = "100" value = "0" step = "0.1" disabled></input>
+                    <input class = "slider"  type="range" min = "0" max = "100" value = "0" step = "1" disabled></input>
                     <p> 100% &nbsp;&nbsp;&nbsp; </p>
                     <p class = "slider-output"> </p>
                 </div>
@@ -71,13 +71,13 @@
                 </div>
                 <div class="input-container type-demand">
                     <p> 0% </p>
-                    <input class = "slider"  type="range" min = "0" max = "500" value = "100" step = "any" disabled></input>
+                    <input class = "slider"  type="range" min = "0" max = "500" value = "100" step = "1" disabled></input>
                     <p> 500% &nbsp;&nbsp;&nbsp; </p>
                     <p class = "slider-output"> </p>
                 </div>
                 <div class="input-container type-electrification">
                     <p> 0% </p>
-                    <input class = "slider" type="range" min = "0" max = "100" value = "0" step = "any" disabled></input>
+                    <input class = "slider" type="range" min = "0" max = "100" value = "0" step = "1" disabled></input>
                     <p> 100% &nbsp;&nbsp;&nbsp; </p>
                     <p class = "slider-output"> </p>
                 </div>
@@ -95,13 +95,13 @@
                 </div>
                 <div class="input-container type-demand">
                     <p> 0% </p>
-                    <input class = "slider" type="range" min = "0" max = "500" value = "100" step = "any" disabled></input>
+                    <input class = "slider" type="range" min = "0" max = "500" value = "100" step = "1" disabled></input>
                     <p> 500% &nbsp;&nbsp;&nbsp; </p>
                     <p class = "slider-output"> </p>
                 </div>
                 <div class="input-container type-electrification">
                     <p> 0% </p>
-                    <input class = "slider" type="range" min = "0" max = "100" value = "0" step = "any" disabled></input>
+                    <input class = "slider" type="range" min = "0" max = "100" value = "0" step = "1" disabled></input>
                     <p> 100% &nbsp;&nbsp;&nbsp; </p>
                     <p class = "slider-output"> </p>
                 </div>
@@ -119,13 +119,13 @@
                 </div>
                 <div class="input-container type-demand">
                     <p> 0% </p>
-                    <input class = "slider" type="range" min = "0" max = "500" value = "100" step = "any" disabled></input>
+                    <input class = "slider" type="range" min = "0" max = "500" value = "100" step = "1" disabled></input>
                     <p> 500% &nbsp;&nbsp;&nbsp; </p>
                     <p class = "slider-output"> </p>
                 </div>
                 <div class="input-container type-electrification">
                     <p> 0% </p>
-                    <input class = "slider" type="range" min = "0" max = "100" value = "0" step = "any" disabled></input>
+                    <input class = "slider" type="range" min = "0" max = "100" value = "0" step = "1" disabled></input>
                     <p> 100% &nbsp;&nbsp;&nbsp; </p>
                     <p class = "slider-output"> </p>
                 </div>
@@ -145,55 +145,72 @@
                 <br/>
                 <div class="input-container type-piece-wind">
                     <p class = "subheader"> Wind: </p>
+                    <p> 0 </p>
+                    <input class = "slider" type="range" min = "0" max = "1000" value = "0" step = "1"></input>
+                    <p> 1000% &nbsp;&nbsp;&nbsp; </p>
+                    <p class = "slider-output"> </p>
+
                     <!-- TODO should most of these have min = "0" or not? Other category is sometimes negative at pull... -->
-                    <input class = "elec-piece-input" type="number" step="any"></input>
-                    <p class = "units"> GWh </p>
+                    <!-- TODO align these right -->
                 </div>
                 <div class="input-container type-piece-solar">
                     <p class = "subheader"> Solar: </p>
-                    <input class = "elec-piece-input" type="number" step="any"></input>
-                    <p class = "units"> GWh </p>
+                    <p> 0 </p>
+                    <input class = "slider" type="range" min = "0" max = "1000" value = "0" step = "1"></input>
+                    <p> 1000% &nbsp;&nbsp;&nbsp; </p>
+                    <p class = "slider-output"> </p>
                 </div>
                 <div class="input-container type-piece-geothermal">
                     <p class = "subheader"> Geothermal: </p>
-                    <input class = "elec-piece-input" type="number" step="any"></input>
-                    <p class = "units"> GWh </p>
+                    <p> 0 </p>
+                    <input class = "slider" type="range" min = "0" max = "1000" value = "0" step = "1"></input>
+                    <p> 1000% &nbsp;&nbsp;&nbsp; </p>
+                    <p class = "slider-output"> </p>
                 </div>
                 <div class="input-container type-piece-hydroelectric">
                     <p class = "subheader"> Hydroelectric: </p>
-                    <input class = "elec-piece-input" type="number" step="any"></input>
-                    <p class = "units"> GWh </p>
+                    <p> 0 </p>
+                    <input class = "slider" type="range" min = "0" max = "1000" value = "0" step = "1"></input>
+                    <p> 1000% &nbsp;&nbsp;&nbsp; </p>
+                    <p class = "slider-output"> </p>
                 </div>
                 <div class="input-container type-piece-nuclear">
                     <p class = "subheader"> Nuclear: </p>
-                    <input class = "elec-piece-input" type="number" step="any"></input>
-                    <p class = "units"> GWh </p>
+                    <p> 0 </p>
+                    <input class = "slider" type="range" min = "0" max = "1000" value = "0" step = "1"></input>
+                    <p> 1000% &nbsp;&nbsp;&nbsp; </p>
+                    <p class = "slider-output"> </p>
                 </div>
                 <div class="input-container type-piece-coal">
                     <p class = "subheader"> Coal: </p>
-                    <input class = "elec-piece-input" type="number" step="any"></input>
-                    <p class = "units"> GWh </p>
+                    <p> 0 </p>
+                    <input class = "slider" type="range" min = "0" max = "300" value = "0" step = "1"></input>
+                    <p> 300% &nbsp;&nbsp;&nbsp; </p>
+                    <p class = "slider-output"> </p>
                 </div>
                 <div class="input-container type-piece-natural-gas">
                     <p class = "subheader"> Natural Gas: </p>
-                    <input class = "elec-piece-input" type="number" step="any"></input>
-                    <p class = "units"> GWh </p>
+                    <p> 0 </p>
+                    <input class = "slider" type="range" min = "0" max = "300" value = "0" step = "1"></input>
+                    <p> 300% &nbsp;&nbsp;&nbsp; </p>
+                    <p class = "slider-output"> </p>
                 </div>
                 <div class="input-container type-piece-petroleum">
                     <p class = "subheader"> Petroleum: </p>
-                    <input class = "elec-piece-input" type="number" step="any"></input>
-                    <p class = "units"> GWh </p>
-                </div>
-                <div class="input-container type-piece-other">
-                    <p class = "subheader"> Other: </p>
-                    <input class = "elec-piece-input" type="number" step="any"></input>
-                    <p class = "units"> GWh </p>
+                    <p> 0 </p>
+                    <input class = "slider" type="range" min = "0" max = "300" value = "0" step = "1"></input>
+                    <p> 300% &nbsp;&nbsp;&nbsp; </p>
+                    <p class = "slider-output"> </p>
                 </div>
                 <br/>
-                <div class="input-container type-piece-import">
+                <div class="output-container type-piece-other">
+                    <p class = "subheader"> Other: </p>
+                    <p class = "output"> </p>
+                </div>
+                <div class="output-container type-piece-import">
                     <p class = "subheader"> Import: </p>
-                    <input class = "elec-piece-input" type="number" step="any"></input>
-                    <p class = "units"> GWh </p>
+                    <p class = "output"> </p>
+                    <!-- TODO make these outputs selected & output and patch upper input group -->
                 </div>
             </div>
             <div class = "vis-container">

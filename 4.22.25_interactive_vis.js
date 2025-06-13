@@ -137,8 +137,10 @@ class ElectricityPiece {
   // TODO should I change this to mirror the above idToVal but just without the add/subtract ? for readability + future flexibility
 
   baseVal; // totaled val state of this piece, GWh
-  
+
   adjustedVal; // GWh
+  
+  adjustedDemand; // %
 
   constructor(key, ids) {
     this.key = key;
@@ -146,6 +148,7 @@ class ElectricityPiece {
     this.ids = ids;
     this.baseVal = null;
     this.adjustedVal = null;
+    this.adjustedDemand = 100;
   }
 }
 
@@ -238,10 +241,11 @@ electricity.set("coal", new ElectricityPiece("coal", ["COW"]));
 electricity.set("natural gas", new ElectricityPiece("natural gas", ["NG"]));
 electricity.set("petroleum", new ElectricityPiece("petroleum", ["PEL", "PC"]));
 
-electricity.set("other", new ElectricityPiece("other", ["OOG", "OTH", "BIO"])); 
+// Separate, because it can be negative, and is not contained in the CO2 section
+let elecOther = new ElectricityPiece("other", ["OOG", "OTH", "BIO"]);
 // (can't split out biomass since it's available here but not in the energy demand section)
 
-// Separate, because it is pulled from a different section of the EIA site
+// Separate, because it is pulled from a different section of the EIA site, can be negative, and is not contained in the CO2 section
 let elecImport = new ElectricityPiece("import", ["ELNIP", "ELISP"]);
 
 // Transmission efficiency (how much of electricity generated is able to be used after losses)
@@ -323,7 +327,7 @@ d3.selectAll(".cell > .input-container.type-demand,.input-container.type-electri
 d3.selectAll(".cell > .type-elec-efficiency > .slider")
   .on("change", (event) => updateElecEfficiency(event));
 
-d3.selectAll(".electricity .elec-piece-input")
+d3.selectAll(".electricity :not(.type-transmission-efficiency) > .slider")
   .on("change", (event) => updateElectricity(event));
 
 d3.select(".electricity .input-container.type-transmission-efficiency > .slider")
@@ -456,12 +460,9 @@ function updateElectricity(event) {
     // Store new value
     let currJSKey = currElectricityType.replace(/-+/, ' ')
 
-    if(currJSKey === "import") {
-      elecImport["adjustedVal"] = currValue;
-    } else {
-      let currElectricityPiece = electricity.get(currJSKey);
-      currElectricityPiece["adjustedVal"] = currValue;
-    }
+    let currElectricityPiece = electricity.get(currJSKey);
+    currElectricityPiece["adjustedDemand"] = currValue;
+    currElectricityPiece["adjustedVal"] = currElectricityPiece["baseVal"] * currValue / 100;
 
     // Propagate effects
     calculateStoreAdjustedCO2("electric");
@@ -543,6 +544,7 @@ async function initializeYears() {
   for(let currElecPiece of electricity.values()) {
     idCount += currElecPiece.ids.length;
   }
+  idCount += elecOther.ids.length;
   idCount += elecImport.ids.length;
   idCount += co2.map.size; // CO2 ids overlap oddly hence the plus not multiply
   idCount += co2.ids.size;
@@ -779,12 +781,17 @@ function visualizeElectricityData() {
   for(let currElectricityPiece of electricity.values()) {
     let currHTMLKey = currElectricityPiece.key.replace(/\s+/, '-');
     let currPieceBox = electricityBox.select(".input-container.type-piece-" + currHTMLKey);
-    currPieceBox.select(".elec-piece-input").property("value", currElectricityPiece["adjustedVal"]); // TODO comma format? would need to be a text box & get parsed if so
+    currPieceBox.select(".slider").property("value", currElectricityPiece["adjustedDemand"]);
+    currPieceBox.select(".slider-output").text(currElectricityPiece["adjustedDemand"] + "% --- " + formatCommas(currElectricityPiece["adjustedVal"]) + " GWh")
   }
 
+  // Other
+  let otherBox = electricityBox.select(".output-container.type-piece-other");
+  otherBox.select(".output").text(formatCommas(elecOther["baseVal"]) + " GWh");
+
   // Imports
-  let importBox = electricityBox.select(".input-container.type-piece-import");
-  importBox.select(".elec-piece-input").property("value", elecImport["adjustedVal"]);
+  let importBox = electricityBox.select(".output-container.type-piece-import");
+  importBox.select(".output").text(formatCommas(elecImport["baseVal"]) + " GWh");
 
   // Transmission efficiency
   let transEffBox = electricityBox.select(".input-container.type-transmission-efficiency");
@@ -799,7 +806,8 @@ function visualizeElectricityData() {
   for(let currElectricityPiece of electricity.values()) {
     currDemand -= currElectricityPiece["adjustedVal"] * transmissionEfficiency;
   }
-  currDemand -= elecImport["adjustedVal"] * transmissionEfficiency;
+  currDemand -= elecOther["baseVal"] * transmissionEfficiency;
+  currDemand -= elecImport["baseVal"] * transmissionEfficiency;
 
   if(currDemand >= 0) {
     electricityBox.select(".demand-output").text("Demand remaining to fill: " + formatCommas(currDemand) + " GWh");
@@ -807,7 +815,7 @@ function visualizeElectricityData() {
     electricityBox.select(".demand-output").text("Over demand by: " + formatCommas(-currDemand) + " GWh");
   }
 
-  // Visualize
+  // Visualize (without other or import)
   // Set up JSON object of values to visualize
   var currJson = {
     name: "Electricity Generation In " + state + " By Pieces",
@@ -1124,6 +1132,9 @@ function composeQueryString(queryType, query, stateId, start, end) {
           allQueryString += ("&facets[fueltypeid][]=" + currID);
         }
       }
+      for(let currID of elecOther["ids"]) {
+        allQueryString += ("&facets[fueltypeid][]=" + currID);
+      }
       allQueryString += ("&facets[sectorid][]=98");
     } else if(queryType === "import") {
       for(let currID of elecImport["ids"]) {
@@ -1254,7 +1265,10 @@ function storeElectricityData(allFullsElecGen, allFullsImport) {
   for(let currElectricityPiece of electricity.values()) {
     currElectricityPiece["baseVal"] = 0;
     currElectricityPiece["adjustedVal"] = 0;
+    currElectricityPiece["adjustedDemand"] = 100;
   }
+  elecOther["baseVal"] = 0;
+  elecOther["adjustedVal"] = 0;
   elecImport["baseVal"] = 0;
   elecImport["adjustedVal"] = 0;
   transmissionEfficiency = 0;
@@ -1280,6 +1294,11 @@ function storeElectricityData(allFullsElecGen, allFullsImport) {
       for(let currElectricityID of currElectricityPiece["ids"]) {
         if(currElectricityID === currFullElecGen["fueltypeid"]) { 
           currElectricityPiece["baseVal"] += postConvert;
+        }
+      }
+      for(let currElectricityID of elecOther["ids"]) {
+        if(currElectricityID === currFullElecGen["fueltypeid"]) { 
+          elecOther["baseVal"] += postConvert;
         }
       }
     }
@@ -1327,6 +1346,7 @@ function storeElectricityData(allFullsElecGen, allFullsImport) {
   for(let currElectricityPiece of electricity.values()) {
     currElectricityPiece["adjustedVal"] = currElectricityPiece["baseVal"];
   }
+  elecOther["adjustedVal"] = elecOther["baseVal"];
   elecImport["adjustedVal"] = elecImport["baseVal"];
 
   console.log("elec gen pieces");
