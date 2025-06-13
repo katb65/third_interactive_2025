@@ -306,6 +306,20 @@ colorMap.set("petroleum", {"green": null, "ngreen": d3.schemeCategory10[5]});
 
 colorMap.set("other", {"green": null, "ngreen": d3.schemeCategory10[6]});
 
+// To round large numbers up to 1 significant figure (used to standardize a clean universal upper bound for sector grid visualizations)
+function roundUpOneSigFig(number) {
+  let currReturn = parseFloat(number.toPrecision(1));
+  let currDigits = currReturn.toString().length;
+  if(currReturn < number) {
+    return currReturn + (1 * (10 ** (currDigits - 1)));
+  } else {
+    return currReturn;
+  }
+}
+
+// To store global bound on the 4 sectors' bar graphs' grid pieces, to know when to redraw all
+let currEnergyBound = 0;
+
 // -----------------------------------------------------
 // ---HTML Element Adjustments: ---
 // -----------------------------------------------------
@@ -657,6 +671,22 @@ async function pullStoreData() {
 // Visualize & print relevant text for the energy data contained in one or all of the four sector boxes (bar graph charts)
 // Optional argument tells it which sector to update; else, updates all four
 function visualizeEnergyData(currSector = null) {
+  // Calculate & compare upper bar graph bound
+  let maxTotal = 0;
+  for(let currSubset of consumption.values()) {
+    maxTotal = Math.max(maxTotal, roundUpOneSigFig(currSubset.subSubsets.get("electric")["adjustedVal"]));
+    maxTotal = Math.max(maxTotal, roundUpOneSigFig(currSubset.subSubsets.get("primary")["adjustedVal"]));
+  }
+  if(maxTotal != currEnergyBound) {
+    currEnergyBound = maxTotal;
+    if(currSector !== null) {
+      // if upper bound was updated but we were only instructed to visualize one sector, must visualize all of them now
+      visualizeEnergyData();
+      return;
+    }
+  }
+
+  // Do main visualization
   if(currSector === null) {
     for(let currKey of consumption.keys()) {
       visualizeEnergyData(currKey);
@@ -719,12 +749,9 @@ function visualizeEnergyData(currSector = null) {
         }
       }) 
       (d3.index(currData, d=>d.stack, d=>d.group));
-
-    let maxTotal = d3.max(stackedData, d => d3.max(d, d => d[1]));
     
-    let yScale = d3.scaleLinear() // TODO: ASK: should this y-scale be global so the squares are cross comparable to each other? maybe have it be global
-    // at a set number so max is not updated at every slide; and move to higher or lower set number when some sector crosses that threshold
-      .domain([0, maxTotal])
+    let yScale = d3.scaleLinear()
+      .domain([0, currEnergyBound])
       .range([currHeight - currMargin, currMargin]) // max functions use array + accessor (nested)
     let xScale = d3.scaleBand()
       .domain(currStacks)
@@ -764,7 +791,7 @@ function visualizeEnergyData(currSector = null) {
     currSectorBox.select(".vis")
       .append("g")
       .attr("transform", "translate(" + currLeftMargin + ", 0)")
-      .call(d3.axisLeft(yScale).tickValues([0, maxTotal]));
+      .call(d3.axisLeft(yScale).tickValues([0, currEnergyBound]));
   }
 }
 
