@@ -945,7 +945,7 @@ function visualizeCO2Data() {
   d3.select(".co2 .subheader").text("CO2: " + formatCommas(currCO2Total) + " Million Metric Tons");
 
   // Visualize
-  var currJson = {
+  let currJson = {
     name: "CO2 Emissions In " + state + " By Sector & Pieces",
     children: [{children: []}] // double wrapped to circumvent d3's treemap layout horizontal/vertical ordering
   }
@@ -959,19 +959,19 @@ function visualizeCO2Data() {
     currJson.children[0].children.push(currPush);
   }
   
-  var currHierarchy = d3.hierarchy(currJson) // adds depth, height, parent to the data
+  let currHierarchy = d3.hierarchy(currJson) // adds depth, height, parent to the data
                         .sum(d=>d["val"])
                         .sort((a,b) => b["val"] - a["val"]); // sort in descending order
 
-                          // Set up the dimensions of a treemap, then pass the data to it
-  var currTreemap = d3.treemap()
-  .tile(d3.treemapSliceDice) // make the subsections in logs rather than jumbled
-  .size([d3.select(".co2 .vis").style("width").slice(0, -2), d3.select(".co2 .vis").style("height").slice(0, -2)])
-  .padding(1);
-  var currRoot = currTreemap(currHierarchy); // determines & assigns x0, x1, y0, & y1 attrs for the data
+  // Set up the dimensions of a treemap, then pass the data to it
+  let currTreemap = d3.treemap()
+    .tile(d3.treemapSliceDice) // make the subsections in logs rather than jumbled
+    .size([d3.select(".co2 .vis").style("width").slice(0, -2), d3.select(".co2 .vis").style("height").slice(0, -2)])
+    .padding(1);
+  let currRoot = currTreemap(currHierarchy); // determines & assigns x0, x1, y0, & y1 attrs for the data
 
   // Now we can make rect elements of these nodes & append them to an svg element on the screen
-  var svgVis = d3.select(".co2 .vis");
+  let svgVis = d3.select(".co2 .vis");
 
   svgVis.selectAll("rect") // by the D3 update pattern it creates new rects upon the "join()" call
     .data(currRoot.leaves().filter(d=>d.depth == 3))
@@ -1046,8 +1046,6 @@ function enableUserInput() {
 // For updateSectorSlider(), updateElecEfficiency()
 // Calculates & store the current adjustedVals for the subSubsets & primary pieces of passed in sector based on the current
 // adjustedDemand and adjustedElectrification
-// TODO: if adjusted values are close to 0 it should probably just make them 0... (as in, things like 1e-11 or something, rounding errors) - espc
-// because some are below 0, which errors out the visualizer
 function calculateStoreAdjustedVals(currSector) {
     let currSubset = consumption.get(currSector);
 
@@ -1067,12 +1065,6 @@ function calculateStoreAdjustedVals(currSector) {
     currSubset.subSubsets.get("electric")["adjustedVal"] = scaledElectric + (toMove * currSubset["adjustedElecEfficiency"]);
     currSubset.subSubsets.get("total")["adjustedVal"] = currSubset.subSubsets.get("primary")["adjustedVal"] + currSubset.subSubsets.get("electric")["adjustedVal"];
 
-    /*
-    // TODO the pieces must be ratioed according to their percentage of NON green total base, but greens still increase proportionally w demand, just
-    // don't decrease w electrification - calculate... still the same amount of energy gets moved from primary to electric, since we have pre filtered
-    // the value in updateSectorSlider to not surpass green primaries; but it's divided differently among the pieces (probably something with toMove)
-      */
-
     let greenSumBase = 0;
     for(let currKey of currSubset.subSubsets.get("primary").primaryPieces.keys()) {
       if(greenSet.has(currKey)) {
@@ -1091,6 +1083,10 @@ function calculateStoreAdjustedVals(currSector) {
         currPrimaryPiece["adjustedVal"] = (currPrimaryPiece["baseVal"]) * (currSubset["adjustedDemand"] / 100)
           - (toMove * (currPrimaryPiece["baseVal"]/(currSubset.subSubsets.get("primary")["baseVal"] - greenSumBase)));
       }
+
+      if(currPrimaryPiece["adjustedVal"] < 0.000001) { // round
+        currPrimaryPiece["adjustedVal"] = 0;
+      }
     }
 
     console.log(currSubset.key + "----------");
@@ -1108,15 +1104,18 @@ function calculateStoreAdjustedVals(currSector) {
 // For updateSectorSlider(), updateElecEfficiency()
 // Calculates & store the current adjustedVals for the CO2 of passed in sector or electric, based on the current
 // energy & electricity maps
-// TODO also round 0 ish vals? As per the above to do
 function calculateStoreAdjustedCO2(currSector) {
   let currSubset = co2.map.get(currSector);
+  
   for(let currCO2Piece of currSubset.co2Pieces.values()) {
     if(currSector === "electric") {
       currCO2Piece["adjustedVal"] = currCO2Piece["factor"] * electricity.get(currCO2Piece["key"])["adjustedVal"];
     } else {
       currCO2Piece["adjustedVal"] = currCO2Piece["factor"] * consumption.get(currSector).subSubsets.get("primary")
                                     .primaryPieces.get(currCO2Piece["key"])["adjustedVal"];
+    }
+    if(currCO2Piece["adjustedVal"] < 0.000001) { // round
+      currCO2Piece["adjustedVal"] = 0;
     }
   }
 }
