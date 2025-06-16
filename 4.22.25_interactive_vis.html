@@ -28,6 +28,19 @@
             <option value = "GW">GW</option>
         </select></label>
     </div>
+    <div id = "green-select">
+        <text class = "subtitles" > Is It Green? </text>
+        <ul>
+          <li> 
+            <input type = "checkbox" class = "nuclear" value = "nuclear" id = "green-nuclear-checkbox" checked disabled></input>
+            <label for = "green-nuclear-checkbox"> Nuclear </label>
+          </li>
+          <li> 
+            <input type = "checkbox" class = "hydroelectric" id = "green-hydroelectric-checkbox" value = "hydroelectric" checked disabled></input>
+            <label for = "green-hydroelectric-checkbox"> Hydroelectric </label>
+          </li>
+        </ul>
+    </div>
     <br/>
     <div class="container">
         <div class="energy">
@@ -132,7 +145,7 @@
             </div>
         </div>
         <div class="electricity">
-            <p> Electricity Generation </p>
+            <p class = "generation-output"></p>
             <div class = "column">
                 <p class = "demand-output"></p>
                 <div class="input-container type-transmission-efficiency">
@@ -149,7 +162,7 @@
                     <input class = "slider" type="range" min = "0" max = "1000" value = "0" step = "1"></input>
                     <p> 1000% &nbsp;&nbsp;&nbsp; </p>
                     <p class = "slider-output"> </p>
-                    
+
                     <!-- TODO align these right -->
                 </div>
                 <div class="input-container type-piece-solar">
@@ -223,6 +236,12 @@
                 <p class = "subheader"> </p>
                 <svg class = "vis"></svg>
             </div>
+        </div>
+    </div>
+    <div class = "container">
+        <div class = "legend">
+            <div class = "vis-container green"></div>
+            <div class = "vis-container ngreen"></div>
         </div>
     </div>
 

@@ -4,6 +4,9 @@
 // ---Assumptions: ---
 // TODO
 // CO2 won't get more subsets
+// Electricity returns won't have duplicate values for some year & ID (else we'll have to do slightly more complex storage - map of id to val -
+// than just adding as we go)
+// Only nuclear & hydro are controversial as green
 
 // ---These should be changed to someone else's EIA API key & directory root (for local files) once I'm not involved with the project: ---
 // (key obtainable on EIA site):
@@ -265,10 +268,6 @@ co2.map.set("industrial", new CO2Subset("industrial", "IC"));
 co2.map.set("transportation", new CO2Subset("transportation", "TC"));
 co2.map.set("electric", new CO2Subset("electric", "EC"));
 
-// TODO: methods for pullStoreCO2, for recalculateCO2, and for visualizeCO2
-// Then probably fix the bar graph variable sizes inside the sectors + make electricity inputs demand% based, not pure number based.
-// And year pull!! And interactivity disabling. And the GWh/GW switch.
-
 // Set of primary pieces considered green
 let greenSet = new Set(["wind", "solar", "geothermal", "hydroelectric", "nuclear"]);
 
@@ -296,15 +295,15 @@ colorMap.set("electric", {"green": d3.schemePastel2[0], "ngreen": null});
 
 colorMap.set("wind", {"green": d3.schemePastel2[1], "ngreen": null});
 colorMap.set("solar", {"green": d3.schemePastel2[2], "ngreen": null});
-colorMap.set("geothermal", {"green": d3.schemePastel2[3], "ngreen": d3.schemeCategory10[0]});
-colorMap.set("hydroelectric", {"green": d3.schemePastel2[4], "ngreen": d3.schemeCategory10[1]});
-colorMap.set("nuclear", {"green": d3.schemePastel2[5], "ngreen": d3.schemeCategory10[2]});
+colorMap.set("geothermal", {"green": d3.schemePastel2[3], "ngreen": null});
+colorMap.set("hydroelectric", {"green": d3.schemePastel2[4], "ngreen": d3.schemeCategory10[0]});
+colorMap.set("nuclear", {"green": d3.schemePastel2[5], "ngreen": d3.schemeCategory10[1]});
 
-colorMap.set("coal", {"green": null, "ngreen": d3.schemeCategory10[3]});
-colorMap.set("natural gas", {"green": null, "ngreen": d3.schemeCategory10[4]});
-colorMap.set("petroleum", {"green": null, "ngreen": d3.schemeCategory10[5]});
+colorMap.set("coal", {"green": null, "ngreen": d3.schemeCategory10[2]});
+colorMap.set("natural gas", {"green": null, "ngreen": d3.schemeCategory10[3]});
+colorMap.set("petroleum", {"green": null, "ngreen": d3.schemeCategory10[4]});
 
-colorMap.set("other", {"green": null, "ngreen": d3.schemeCategory10[6]});
+colorMap.set("other", {"green": null, "ngreen": d3.schemeCategory10[5]});
 
 // To round large numbers up to 1 significant figure (used to standardize a clean universal upper bound for sector grid visualizations)
 function roundUpOneSigFig(number) {
@@ -334,8 +333,10 @@ d3.select("#year-select-drop")
 d3.select("#GWh-or-GW-drop")
   .on("change", updateGWhorGW);
 
+d3.select("#green-select").selectAll("input")
+  .on("change", (event) => updateGreenSet(event));
+
 d3.selectAll(".cell > .input-container.type-demand,.input-container.type-electrification > .slider")
-// TODO why is this not working for demand...
   .on("change", (event) => updateSectorSlider(event));
 
 d3.selectAll(".cell > .type-elec-efficiency > .slider")
@@ -363,6 +364,7 @@ async function updateState() {
   visualizeEnergyData();
   visualizeElectricityData();
   visualizeCO2Data();
+  visualizeLegend();
 
   enableUserInput();
 }
@@ -379,6 +381,7 @@ async function updateYear() {
   visualizeEnergyData();
   visualizeElectricityData();
   visualizeCO2Data();
+  visualizeLegend();
 
   enableUserInput();
 }
@@ -391,6 +394,23 @@ function updateGWhorGW() {
 
   visualizeStateData();
   */
+}
+
+// Called on user change of what pieces count as green
+function updateGreenSet(event) {
+  let currPiece = d3.select(event.target).property("value");
+  if(d3.select(event.target).property("checked")) {
+    greenSet.add(currPiece);
+  } else {
+    greenSet.delete(currPiece);
+  }
+
+  preventGreenElectrification();
+
+  visualizeEnergyData();
+  visualizeElectricityData();
+  visualizeCO2Data();
+  visualizeLegend();
 }
 
 // Called on user sliding a demand or electrification % slider within a sector box, changes & reprints corresponding internal data
@@ -431,6 +451,7 @@ function updateSectorSlider(event) {
     visualizeEnergyData(currSector);
     visualizeElectricityData();
     visualizeCO2Data();
+    visualizeLegend();
 }
 
 // Called on user changing the electricity efficiency factor for some sector
@@ -458,6 +479,7 @@ function updateElecEfficiency(event) {
     visualizeEnergyData(currSector);
     visualizeElectricityData();
     visualizeCO2Data();
+    visualizeLegend();
 }
 
 // Called on user changing some piece of electricity generation or import quantity
@@ -484,6 +506,7 @@ function updateElectricity(event) {
     // Visualize event update
     visualizeElectricityData();
     visualizeCO2Data();
+    visualizeLegend();
 }
 
 // Called on user changing electricity transmission efficiency
@@ -516,6 +539,7 @@ async function initialize() {
     visualizeEnergyData();
     visualizeElectricityData();
     visualizeCO2Data();
+    visualizeLegend();
 
     enableUserInput();
 }
@@ -702,10 +726,15 @@ function visualizeEnergyData(currSector = null) {
     currSectorBox.select(".type-elec-efficiency > .slider-output").text(formatCommas(currSectorObj["adjustedElecEfficiency"]));
 
     currSectorBox.select(".type-demand > .slider").property("value", currSectorObj["adjustedDemand"]);
-    currSectorBox.select(".type-demand > .slider-output").text(formatCommas(currSectorObj["adjustedDemand"]) + "%");
+    currSectorBox.select(".type-demand > .slider-output").text(currSectorObj["adjustedDemand"] + "%");
 
     currSectorBox.select(".type-electrification > .slider").property("value", currSectorObj["adjustedElectrification"]);
-    currSectorBox.select(".type-electrification > .slider-output").text(formatCommas(currSectorObj["adjustedElectrification"]) + "%");
+    if(Math.floor(currSectorObj["adjustedElectrification"]) < currSectorObj["adjustedElectrification"]) {
+      // if this is the pulled electrification, it'll be to a higher level of precision than we allow it to be adjusted to, so display is slightly different
+      currSectorBox.select(".type-electrification > .slider-output").text(formatCommas(currSectorObj["adjustedElectrification"]) + "%");
+    } else {
+      currSectorBox.select(".type-electrification > .slider-output").text(currSectorObj["adjustedElectrification"] + "%");
+    }
 
     // Layout number specifics
     let currMargin = 20;
@@ -736,9 +765,6 @@ function visualizeEnergyData(currSector = null) {
       currData.push({"stack": "primary", "group": currKey, "val": currPrimaryPieces.get(currKey)["adjustedVal"]})
     }
 
-    console.log(currData);
-    console.log(d3.index(currData, d=>d.stack, d=>d.group));
-
     let stackedData = d3.stack()
       .keys(currGroups)
       .value(([, d], key) => { // this uses this format because the data is the index created by the below, aka a nested map by the 2 keys (so d is inner map)
@@ -757,8 +783,6 @@ function visualizeEnergyData(currSector = null) {
       .domain(currStacks)
       .range([currLeftMargin, currWidth - currMargin]) 
       .padding(0.1);
-  
-    console.log(stackedData);
   
     // Bars
     currSectorBox.select(".vis")
@@ -826,21 +850,27 @@ function visualizeElectricityData() {
   transEffBox.select(".slider-output").text(formatCommas(transmissionEfficiency));
 
   // Calculate & display difference between available and needed electricity (taking into account the transmission efficiency)
+  // Also display total generation
   let currDemand = 0;
+  let currGeneration = 0;
   for(let currSubset of consumption.values()) {
     currDemand += currSubset.subSubsets.get("electric")["adjustedVal"];
   }
   for(let currElectricityPiece of electricity.values()) {
     currDemand -= currElectricityPiece["adjustedVal"] * transmissionEfficiency;
+    currGeneration += currElectricityPiece["adjustedVal"];
   }
   currDemand -= elecOther["baseVal"] * transmissionEfficiency;
+  currGeneration += elecOther["baseVal"];
   currDemand -= elecImport["baseVal"] * transmissionEfficiency;
+  currGeneration += elecImport["baseVal"];
 
   if(currDemand >= 0) {
     electricityBox.select(".demand-output").text("Demand remaining to fill: " + formatCommas(currDemand) + " GWh");
   } else {
     electricityBox.select(".demand-output").text("Over demand by: " + formatCommas(-currDemand) + " GWh");
   }
+  electricityBox.select(".generation-output").text("Electricity Generation & Import: " + formatCommas(currGeneration) + " GWh");
 
   // Visualize (without other or import)
   // Set up JSON object of values to visualize
@@ -907,10 +937,7 @@ function visualizeElectricityData() {
 function visualizeCO2Data() {
   // Print
   let currCO2Total = 0;
-  console.log("co2 totaling:");
   for(let currSubset of co2.map.values()) {
-    console.log(currCO2Total);
-    console.log(currSubset);
     for(let currCO2Piece of currSubset.co2Pieces.values()) {
       currCO2Total += currCO2Piece["adjustedVal"];
     }
@@ -960,20 +987,12 @@ function visualizeCO2Data() {
           return colorMap.get(d.data.key)["ngreen"];
         }
     });
+}
 
-
-
-
-
-  console.log("CO2");
-  for(let currSubset of co2.map.values()) {
-    console.log("");
-    console.log(currSubset["key"]);
-    for(let currCO2Piece of currSubset.co2Pieces.values()) {
-      console.log(currCO2Piece["key"]);
-      console.log(currCO2Piece["adjustedVal"]);
-    }
-  }
+// Visualize color legend and print associated values (unified for all data)
+function visualizeLegend() {
+  printLegendPiece(true);
+  printLegendPiece(false);
 }
 
 // -----------------------------------------------------
@@ -1003,6 +1022,8 @@ function disableUserInput() {
         .property("disabled", true);
     d3.select("#GWh-or-GW-drop")
         .property("disabled", true);
+    d3.select("#green-select").selectAll("input")
+        .property("disabled", true);
     d3.selectAll(".cell .slider")
         .property("disabled", true);
 }
@@ -1015,6 +1036,8 @@ function enableUserInput() {
     d3.select("#year-select-drop")
         .attr("disabled", null);
     d3.select("#GWh-or-GW-drop")
+        .attr("disabled", null);
+    d3.select("#green-select").selectAll("input")
         .attr("disabled", null);
     d3.selectAll(".cell .slider")
         .attr("disabled", null);
@@ -1300,8 +1323,10 @@ function storeElectricityData(allFullsElecGen, allFullsImport) {
   elecImport["adjustedVal"] = 0;
   transmissionEfficiency = 0;
   
+  console.log(allFullsElecGen);
   // Isolate pulled pieces + store
   for(let currFullElecGen of allFullsElecGen.response.data) {
+    console.log(currFullElecGen);
     if(parseInt(currFullElecGen["period"]) !== year) {
       continue; // we fetched several years near current year due to variable API mechanics, so cycle past irrelevant ones
     }
@@ -1323,10 +1348,10 @@ function storeElectricityData(allFullsElecGen, allFullsImport) {
           currElectricityPiece["baseVal"] += postConvert;
         }
       }
-      for(let currElectricityID of elecOther["ids"]) {
-        if(currElectricityID === currFullElecGen["fueltypeid"]) { 
-          elecOther["baseVal"] += postConvert;
-        }
+    }
+    for(let currElectricityID of elecOther["ids"]) {
+      if(currElectricityID === currFullElecGen["fueltypeid"]) { 
+        elecOther["baseVal"] += postConvert;
       }
     }
   }
@@ -1360,6 +1385,7 @@ function storeElectricityData(allFullsElecGen, allFullsImport) {
     currElectricitySum += currElectricityPiece["baseVal"];
   }
   currElectricitySum += elecImport["baseVal"];
+  currElectricitySum += elecOther["baseVal"];
 
   let currElecUseSum = 0;
   for(let currSubset of consumption.values()) {
@@ -1438,7 +1464,6 @@ function storeCO2Data(allFullsCO2) {
       }
       //TODO atp it stores 0 as factor if that's what it is calculated as or if NaN aka divided by 0 generation/use... what if user increases one subset use that wasn't there before?
       // but also how would they do that...
-      console.log(currCO2Piece["factor"]);
 
       currCO2Piece["adjustedVal"] = currCO2Piece["baseVal"];
     }
@@ -1519,33 +1544,144 @@ function storeCO2Data(allFullsCO2) {
       */
 }
 
-// For updateSectorSlider(), updateElecEfficiency()
+// For updateSectorSlider(), updateElecEfficiency(), updateGreenSet()
 // The min amount of primaries that can be left unelectrified is the green primaries: if the electrification % goes too high (or adjustedElecEfficiency changes 
 // the max electrification %), it will be checked & reduced to its max value by the below, for some key of some currSubset. 
-function preventGreenElectrification(currSector) {
-    let currSubset = consumption.get(currSector);
+function preventGreenElectrification(currSector = null) {
+  if(currSector === null) {
+    for(let currSectorKey of consumption.keys()) {
+      preventGreenElectrification(currSectorKey);
+      return;
+    }
+  }
 
-    // Because of electric efficiency factors, the calculation is not a plain ratio, rather:
-    // 1 - max electrification % = green primaries base sum / total adjusted sum = 
-    // green primaries base sum / (green primaries base sum + electric base + non-green primaries base sum * electric efficiency)
-    // (since the non-green primaries in that case all get converted to electricity)
-    // (this ignores demand % because this ratio will remain the same regardless; so green primaries base sum = green primaries adjusted sum for the above,
-    // as demand % = 100, and none of green primaries get electrified)
+  let currSubset = consumption.get(currSector);
 
-    let greenSumBase = 0;
-    for(let currKey of currSubset.subSubsets.get("primary").primaryPieces.keys()) {
-      if(greenSet.has(currKey)) {
-        greenSumBase += currSubset.subSubsets.get("primary").primaryPieces.get(currKey)["baseVal"];
+  // Because of electric efficiency factors, the calculation is not a plain ratio, rather:
+  // 1 - max electrification % = green primaries base sum / total adjusted sum = 
+  // green primaries base sum / (green primaries base sum + electric base + non-green primaries base sum * electric efficiency)
+  // (since the non-green primaries in that case all get converted to electricity)
+  // (this ignores demand % because this ratio will remain the same regardless; so green primaries base sum = green primaries adjusted sum for the above,
+  // as demand % = 100, and none of green primaries get electrified)
+
+  let greenSumBase = 0;
+  for(let currKey of currSubset.subSubsets.get("primary").primaryPieces.keys()) {
+    if(greenSet.has(currKey)) {
+      greenSumBase += currSubset.subSubsets.get("primary").primaryPieces.get(currKey)["baseVal"];
+    }
+  }
+
+  let ngreenSumBase = currSubset.subSubsets.get("primary")["baseVal"] - greenSumBase;
+  let maxElectrification = 100 * (1 - greenSumBase/(currSubset.subSubsets.get("primary")["baseVal"] - ngreenSumBase 
+    + currSubset.subSubsets.get("electric")["baseVal"] + ngreenSumBase * currSubset["adjustedElecEfficiency"]));
+
+  if(currSubset["adjustedElectrification"] > maxElectrification) {
+    currSubset["adjustedElectrification"] = maxElectrification;
+  }
+}
+
+// For visualizeLegend()
+// Legend is visualized in two sections, green and ngreen, which are printed virtually the same, as below
+function printLegendPiece(green) {
+  // TODO make this work.........
+  let currArr = [];
+  let currDiv;
+  let size = 15;
+
+  if(green) {
+    for(currColorPiece of colorMap.keys()) { // TODO once the pieces existing are malleable (aviation/marine), this will have to be compiled differently
+      if(currColorPiece === "electric" || greenSet.has(currColorPiece)) {
+        currArr.push({"key": currColorPiece});
       }
     }
-
-    let ngreenSumBase = currSubset.subSubsets.get("primary")["baseVal"] - greenSumBase;
-    let maxElectrification = 100 * (1 - greenSumBase/(currSubset.subSubsets.get("primary")["baseVal"] - ngreenSumBase 
-      + currSubset.subSubsets.get("electric")["baseVal"] + ngreenSumBase * currSubset["adjustedElecEfficiency"]));
-
-    if(currSubset["adjustedElectrification"] > maxElectrification) {
-      currSubset["adjustedElectrification"] = maxElectrification;
+    currDiv = d3.select(".legend > .vis-container.green");
+  } else {
+    for(currColorPiece of colorMap.keys()) { 
+      if(currColorPiece !== "electric" && !greenSet.has(currColorPiece)) {
+        currArr.push({"key": currColorPiece});
+      }
     }
+    currDiv = d3.select(".legend > .vis-container.ngreen");
+  }
+  console.log(currArr);
+  console.log(currDiv);
+
+  // TODO: show the extra text only on "wordy" flag enabled - may need to add wordy as a flag to the object above too so it actually regens the 
+  // output
+
+  currDiv.selectAll("svg")
+    .data(currArr)
+    .join("svg")
+    .attr("width", parseInt(currDiv.style("width").slice(0, -2)))
+    .attr("height", (d) => { return size*8 + Array.from(consumption.keys()).length; })
+    .each(function(d,i) { // passes each existing svg's data down into itself to create squares & text
+      let currColorPiece = d.key;
+      console.log(currColorPiece);
+
+      // title (ex. wind)
+      d3.select(this).selectAll(".type")
+        .data([currColorPiece])
+        .join("text")
+        .attr("class", "subtitles type")
+        .attr("x", size*2)
+        .attr("y", (d) => {return size*2;}
+        )
+        .text(d=>d);
+
+      // square
+      d3.select(this).selectAll("rect")
+        .data([currColorPiece])
+        .join("rect")
+        .attr("x", 0)
+        .attr("y", size*1.7)
+        .attr("width", size)
+        .attr("height", size)
+        .attr("fill", (d) => {
+          if(d === "electric" || greenSet.has(d)) {
+            return colorMap.get(d)["green"];
+          } else {
+            return colorMap.get(d)["ngreen"];
+          }
+        });
+
+      console.log(colorMap.get(d.key));
+      // sectors & their values for this piece
+      let sectorsPlusElectric = Array.from(consumption.keys());
+      sectorsPlusElectric.push("electric");
+      d3.select(this).selectAll(".sector")
+        .data(sectorsPlusElectric) // sectors
+        .join("text")
+        .attr("class", "subtitles sector")
+        .attr("x", size*2)
+        .attr("y", (d, i) => { return (i+1)*(size + 2) + size*2})
+        .text((d) => {
+          let currPrint = "";
+          if(currColorPiece !== "electric") {
+            currPrint += d + ": ";
+            if(d === "electric") {
+              if(currColorPiece === "other") {
+                currPrint += formatCommas(elecOther["adjustedVal"]) + " GWh";
+              } else {
+                currPrint += formatCommas(electricity.get(currColorPiece)["adjustedVal"]) + " GWh";
+              }
+            } else if(currColorPiece === "nuclear") {
+              currPrint += "0 primary GWh";
+            } else {
+              currPrint += formatCommas(consumption.get(d).subSubsets.get("primary").primaryPieces.get(currColorPiece)["adjustedVal"]) + " primary GWh";
+            }
+            if(Array.from(co2.ids.values()).includes(currColorPiece)) {
+              let currCO2Sum = 0;
+              for(let currCO2Subset of co2.map.values()) {
+                currCO2Sum += currCO2Subset.co2Pieces.get(currColorPiece)["adjustedVal"];
+              }
+              currPrint += ", " + formatCommas(co2.map.get(d).co2Pieces.get(currColorPiece)["adjustedVal"]) + " million metric tons CO2";
+            }
+          }
+          
+          return currPrint;
+        });
+
+      });
 }
 
 function checkTotalParts() { // TODO

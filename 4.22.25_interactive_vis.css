@@ -2,6 +2,10 @@
     display: inline-block;
 }
 
+.container .vis-container {
+    display: inline-block;
+}
+
 .energy {
     display: grid;
     grid-template-columns: 300px 300px;
@@ -37,6 +41,10 @@
     height: 150px;
 }
 
+.electricity .input-container {
+    width: 500px;
+}
+
 .electricity .vis-container {
     width: 250px;
     height: 300px;
@@ -47,6 +55,11 @@
     height: 300px;
 }
 
+.electricity .slider-output {
+    text-anchor: end;
+    /* TODO make this work lol */
+}
+
 .co2 .vis-container {
     width: 300px;
     height: 1000px;
@@ -55,4 +68,12 @@
 .co2 .vis {
     width: 300px;
     height: 1000px;
+}
+
+.legend .vis-container.green {
+    width: 300px;
+}
+
+.legend .vis-container.ngreen {
+    width: 600px;
 }
