@@ -231,6 +231,15 @@ consumption.set("transportation", new EnergySubset("transportation", 0.2, "ESACB
                                                     null, null, null, null,
                                                     "CLACB", "NGASB", null, "PAACB")); 
 
+// For advanced selection of user's exclusion of marine or aviation from transportation electrification primary pieces
+// These hold only the ids & pre-loaded base val: adjusted val will have to get calculated as they're moved in/out of use
+// NOTE: if these change to include ids to subtract, the method by which they are added to/subtracted from consumption on 
+// checkbox check will have to be modified slightly
+let exclude = new Map();
+
+exclude.set("marine", new PrimaryPiece("marine", ["RFACB"], []));
+exclude.set("aviation", new PrimaryPiece("aviation", ["AVACB", "JFACB"], []));
+
 // (piece key -> ElectricityPiece object)
 let electricity = new Map();
 
@@ -305,6 +314,9 @@ colorMap.set("petroleum", {"green": null, "ngreen": d3.schemeCategory10[4]});
 
 colorMap.set("other", {"green": null, "ngreen": d3.schemeCategory10[5]});
 
+colorMap.set("marine", {"green": null, "ngreen": "#000000"});
+colorMap.set("aviation", {"green": null, "ngreen": "#000000"});
+
 // To round large numbers up to 1 significant figure (used to standardize a clean universal upper bound for sector grid visualizations)
 function roundUpOneSigFig(number) {
   let currReturn = parseFloat(number.toPrecision(1));
@@ -335,6 +347,9 @@ d3.select("#GWh-or-GW-drop")
 
 d3.select("#green-select").selectAll("input")
   .on("change", (event) => updateGreenSet(event));
+
+d3.select("#exclude-transportation-select").selectAll("input")
+  .on("change", (event) => updateExcludeTransportationSet(event));
 
 d3.selectAll(".cell > .input-container.type-demand,.input-container.type-electrification > .slider")
   .on("change", (event) => updateSectorSlider(event));
@@ -409,6 +424,42 @@ function updateGreenSet(event) {
 
   visualizeEnergyData();
   visualizeElectricityData();
+  visualizeCO2Data();
+  visualizeLegend();
+}
+
+// Called on user change of what pieces to exclude from transportation's electrification
+function updateExcludeTransportationSet(event) {
+  let currPiece = d3.select(event.target).property("value");
+  let currPrimaryPieces = consumption.get("transportation").subSubsets.get("primary").primaryPieces;
+
+  if(d3.select(event.target).property("checked")) { // split away from petroleum
+
+    // copy stored base vals of exclude piece into transportation's primary pieces map + adjust its petroleum to not double count
+    currPrimaryPieces.set(currPiece, new PrimaryPiece(currPiece, exclude.get(currPiece)["idToVal"].keys(), []));
+    currPrimaryPieces.get(currPiece)["baseVal"] = exclude.get(currPiece)["baseVal"];
+
+    for(let currID of exclude.get(currPiece)["idToVal"].keys()) {
+      currPrimaryPieces.get("petroleum")["idToVal"].set(currID, {baseVal: exclude.get(currPiece)["baseVal"], add: false});
+    }
+
+    currPrimaryPieces.get("petroleum")["baseVal"] -= exclude.get(currPiece)["baseVal"];
+  } else { // consolidate back into petroleum
+    currPrimaryPieces.delete(currPiece);
+    for(let currID of exclude.get(currPiece)["idToVal"].keys()) {
+      currPrimaryPieces.get("petroleum")["idToVal"].delete(currID);
+    }
+
+    currPrimaryPieces.get("petroleum")["baseVal"] += exclude.get(currPiece)["baseVal"];
+  }
+
+  // Propagate adjusted vals
+  preventGreenElectrification("transportation"); // in case one got moved to unelectrifiable
+  calculateStoreAdjustedVals("transportation");
+  console.log("electric of transportation at 459 " + consumption.get("transportation").subSubsets.get("electric")["adjustedVal"]);
+  calculateStoreAdjustedCO2("transportation"); // in case of electrification change
+
+  visualizeEnergyData("transportation");
   visualizeCO2Data();
   visualizeLegend();
 }
@@ -535,6 +586,19 @@ async function initialize() {
     await initializeYears();
 
     await pullStoreData();
+
+    console.log("588 -------");
+    for(let currSubset of consumption.values()) {
+      console.log(currSubset.key);
+      console.log("electric ") + currSubset.subSubsets.get("electric")["adjustedVal"];
+      console.log("primary ") + currSubset.subSubsets.get("primary")["adjustedVal"];
+      for(let currPiece of currSubset.subSubsets.get("primary").primaryPieces.values()) {
+        console.log(" " + currPiece.key + " " + currPiece["adjustedVal"]);
+        for(let currID of currPiece.idToVal.keys()) {
+          console.log("  " + currID + " " + currPiece.idToVal["add"] + " "  + currPiece.idToVal["baseVal"]);
+        }
+      }
+    }
 
     visualizeEnergyData();
     visualizeElectricityData();
@@ -765,6 +829,8 @@ function visualizeEnergyData(currSector = null) {
       currData.push({"stack": "primary", "group": currKey, "val": currPrimaryPieces.get(currKey)["adjustedVal"]})
     }
 
+    console.log("electric of transportation at 831 " + consumption.get("transportation").subSubsets.get("electric")["adjustedVal"]);
+
     let stackedData = d3.stack()
       .keys(currGroups)
       .value(([, d], key) => { // this uses this format because the data is the index created by the below, aka a nested map by the 2 keys (so d is inner map)
@@ -787,7 +853,7 @@ function visualizeEnergyData(currSector = null) {
     // Bars
     currSectorBox.select(".vis")
       .selectAll("g")
-      .data(stackedData)
+      .data(stackedData, d=>d) // key necessary to avoid weird absorption of axes' groups from below when amount of data changes
       .join("g") // this also cleans out prior iterations' axes
         .attr("fill", (d) => {
           if(greenSet.has(d.key) || d.key === "electric") {
@@ -1024,6 +1090,8 @@ function disableUserInput() {
         .property("disabled", true);
     d3.select("#green-select").selectAll("input")
         .property("disabled", true);
+    d3.select("#exclude-transportation-select").selectAll("input")
+        .property("disabled", true);
     d3.selectAll(".cell .slider")
         .property("disabled", true);
 }
@@ -1039,13 +1107,15 @@ function enableUserInput() {
         .attr("disabled", null);
     d3.select("#green-select").selectAll("input")
         .attr("disabled", null);
+    d3.select("#exclude-transportation-select").selectAll("input")
+        .attr("disabled", null);
     d3.selectAll(".cell .slider")
         .attr("disabled", null);
 }
 
 // For updateSectorSlider(), updateElecEfficiency()
 // Calculates & store the current adjustedVals for the subSubsets & primary pieces of passed in sector based on the current
-// adjustedDemand and adjustedElectrification
+// adjustedDemand and adjustedElectrification, and green/excluded pieces
 function calculateStoreAdjustedVals(currSector) {
     let currSubset = consumption.get(currSector);
 
@@ -1063,25 +1133,26 @@ function calculateStoreAdjustedVals(currSector) {
 
     currSubset.subSubsets.get("primary")["adjustedVal"] = scaledPrimary - toMove;
     currSubset.subSubsets.get("electric")["adjustedVal"] = scaledElectric + (toMove * currSubset["adjustedElecEfficiency"]);
+    console.log("electric of transportation at 1132 " + currSubset.subSubsets.get("electric")["adjustedVal"]);
     currSubset.subSubsets.get("total")["adjustedVal"] = currSubset.subSubsets.get("primary")["adjustedVal"] + currSubset.subSubsets.get("electric")["adjustedVal"];
 
-    let greenSumBase = 0;
+    let unelectrifiableSumBase = 0;
     for(let currKey of currSubset.subSubsets.get("primary").primaryPieces.keys()) {
-      if(greenSet.has(currKey)) {
-        greenSumBase += currSubset.subSubsets.get("primary").primaryPieces.get(currKey)["baseVal"];
+      if(greenSet.has(currKey) || exclude.has(currKey)) {
+        unelectrifiableSumBase += currSubset.subSubsets.get("primary").primaryPieces.get(currKey)["baseVal"];
       }
     }
 
     for(let currKey of currSubset.subSubsets.get("primary").primaryPieces.keys()) {
       let currPrimaryPiece = currSubset.subSubsets.get("primary").primaryPieces.get(currKey);
       
-      if(greenSet.has(currKey)) {
-        // if this primary piece is green, it is simply scaled with demand: none of it is electrified
+      if(greenSet.has(currKey) || exclude.has(currKey)) {
+        // if this primary piece is green or excluded, it is simply scaled with demand: none of it is electrified
         currPrimaryPiece["adjustedVal"] = currPrimaryPiece["baseVal"] * (currSubset["adjustedDemand"] / 100);
       } else {
         // else it must be scaled then proportionally electrified, excluding greens from the proportion
         currPrimaryPiece["adjustedVal"] = (currPrimaryPiece["baseVal"]) * (currSubset["adjustedDemand"] / 100)
-          - (toMove * (currPrimaryPiece["baseVal"]/(currSubset.subSubsets.get("primary")["baseVal"] - greenSumBase)));
+          - (toMove * (currPrimaryPiece["baseVal"]/(currSubset.subSubsets.get("primary")["baseVal"] - unelectrifiableSumBase)));
       }
 
       if(currPrimaryPiece["adjustedVal"] < 0.000001) { // round
@@ -1105,15 +1176,29 @@ function calculateStoreAdjustedVals(currSector) {
 // Calculates & store the current adjustedVals for the CO2 of passed in sector or electric, based on the current
 // energy & electricity maps
 function calculateStoreAdjustedCO2(currSector) {
+  console.log("1178!!");
+  console.log(currSector);
   let currSubset = co2.map.get(currSector);
-  
+
   for(let currCO2Piece of currSubset.co2Pieces.values()) {
+    console.log("1183 " + currCO2Piece);
     if(currSector === "electric") {
       currCO2Piece["adjustedVal"] = currCO2Piece["factor"] * electricity.get(currCO2Piece["key"])["adjustedVal"];
     } else {
       currCO2Piece["adjustedVal"] = currCO2Piece["factor"] * consumption.get(currSector).subSubsets.get("primary")
-                                    .primaryPieces.get(currCO2Piece["key"])["adjustedVal"];
-    }
+        .primaryPieces.get(currCO2Piece["key"])["adjustedVal"];
+
+      if(currSector === "transportation" && currCO2Piece["key"] === "petroleum") { // exclude's pieces also fall under transportation petroleum CO2, if present
+        console.log("1188!");
+        for(let currKey of exclude.keys()) { 
+          if(consumption.get("transportation").subSubsets.get("primary").primaryPieces.has(currKey)) {
+            currCO2Piece["adjustedVal"] += currCO2Piece["factor"] * consumption.get("transportation").subSubsets.get("primary")
+              .primaryPieces.get(currKey)["adjustedVal"]
+              console.log("1192 " + currKey + " " + currCO2Piece["adjustedVal"]);
+          }
+        }
+      }
+    }    
     if(currCO2Piece["adjustedVal"] < 0.000001) { // round
       currCO2Piece["adjustedVal"] = 0;
     }
@@ -1168,6 +1253,14 @@ function composeQueryString(queryType, query, stateId, start, end) {
         if(query !== null) { // if we're not just years-initializing, query for the little pieces too
           for(let currPrimaryPiece of currSubset.subSubsets.get("primary").primaryPieces.values()) {
             for(let currID of currPrimaryPiece.idToVal.keys()) {
+              if(currID !== null) {
+                allQueryString += ("&facets[seriesId][]=" + currID);
+              }
+            }
+          }
+          // pull exclude values even if they are not currently active (may double pull them, but storage won't double store)
+          for(let currPiece of exclude.values()) {
+            for(let currID of currPiece.idToVal.keys()) {
               if(currID !== null) {
                 allQueryString += ("&facets[seriesId][]=" + currID);
               }
@@ -1231,8 +1324,17 @@ function storeSectorData(allFullsEnergy) {
             }
         }
     }
+    for(let currPiece of exclude.values()) {
+      currPiece["baseVal"] = 0;
+
+      for(let currVal of currPiece.idToVal.values()) {
+        currVal["baseVal"] = 0;
+      }
+    }
   
     // isolate the requested values from the energy response & store them in the right spots
+    // make sure to loop through all spots every time, because some values go to two spots (ex. if we're using the advanced setting of excluding
+    // some fuels from electrification, their IDs will be subtracted from one primary piece, but added to another)
     for(let currFullEnergy of allFullsEnergy.response.data) {
       if(parseInt(currFullEnergy["period"]) !== year) {
         continue; // we fetched several years near current year due to variable API mechanics, so cycle past irrelevant ones
@@ -1264,6 +1366,13 @@ function storeSectorData(allFullsEnergy) {
                 }
               }
             }
+          }
+        }
+      }
+      for(let currPiece of exclude.values()) {
+        for(let currID of currPiece.idToVal.keys()) {
+          if(currID === currFullEnergy["seriesId"]) {
+            currPiece.idToVal.get(currID)["baseVal"] = postConvert;
           }
         }
       }
@@ -1300,6 +1409,25 @@ function storeSectorData(allFullsEnergy) {
       currSubset["adjustedDemand"] = 100;
       currSubset["adjustedElectrification"] = 100 * (currSubset.subSubsets.get("electric")["baseVal"])/(currSubset.subSubsets.get("total")["baseVal"]);
     }
+    for(let currPiece of exclude.values()) {
+      for(let currVal of currPiece.idToVal.values()) {
+        if(currVal["add"]) { 
+          currPiece["baseVal"] += currVal["baseVal"];
+        } else {
+          currPiece["baseVal"] -= currVal["baseVal"];
+        }
+      }
+      // we don't set adjusted val for stored inactive pieces
+    }
+
+    /*
+    console.log("1397-----");
+    for(let currSubset of consumption.values()) {
+      console.log(currSubset.key);
+      console.log("electric " + currSubset.subSubsets.get("electric")["adjustedVal"]);
+      console.log("primary " + currSubset.subSubsets.get("primary")["adjustedVal"]);
+    }
+      */
 }
 
 // For pullStoreData()
@@ -1455,14 +1583,20 @@ function storeCO2Data(allFullsCO2) {
       if(currSubset["key"] === "electric") {
         currCO2Piece["factor"] = currCO2Piece["baseVal"] / electricity.get(currCO2Piece["key"])["baseVal"];
       } else {
-        currCO2Piece["factor"] = currCO2Piece["baseVal"] / consumption.get(currSubset["key"]).subSubsets.get("primary")
-                                                          .primaryPieces.get(currCO2Piece["key"])["baseVal"];
+        let currEnergyVal = consumption.get(currSubset["key"]).subSubsets.get("primary").primaryPieces.get(currCO2Piece["key"])["baseVal"];
+
+        if(currSubset["key"] === "transportation" && currCO2Piece === "petroleum") {
+          for(let currKey of exclude.keys()) { 
+            if(consumption.get("transportation").subSubsets.get("primary").primaryPieces.has(currKey)) {
+              currEnergyVal += consumption.get("transportation").subSubsets.get("primary").primaryPieces.get(currKey)["adjustedVal"]
+            }
+          }
+        }
+        currCO2Piece["factor"] = currCO2Piece["baseVal"] / currEnergyVal;
       }
       if(isNaN(currCO2Piece["factor"])) {
         currCO2Piece["factor"] = 0;
       }
-      //TODO atp it stores 0 as factor if that's what it is calculated as or if NaN aka divided by 0 generation/use... what if user increases one subset use that wasn't there before?
-      // but also how would they do that...
 
       currCO2Piece["adjustedVal"] = currCO2Piece["baseVal"];
     }
@@ -1546,6 +1680,7 @@ function storeCO2Data(allFullsCO2) {
 // For updateSectorSlider(), updateElecEfficiency(), updateGreenSet()
 // The min amount of primaries that can be left unelectrified is the green primaries: if the electrification % goes too high (or adjustedElecEfficiency changes 
 // the max electrification %), it will be checked & reduced to its max value by the below, for some key of some currSubset. 
+// Advanced settings can also let user exclude aviation & marine primaries from transportation sector electrification.
 function preventGreenElectrification(currSector = null) {
   if(currSector === null) {
     for(let currSectorKey of consumption.keys()) {
@@ -1557,22 +1692,23 @@ function preventGreenElectrification(currSector = null) {
   let currSubset = consumption.get(currSector);
 
   // Because of electric efficiency factors, the calculation is not a plain ratio, rather:
-  // 1 - max electrification % = green primaries base sum / total adjusted sum = 
-  // green primaries base sum / (green primaries base sum + electric base + non-green primaries base sum * electric efficiency)
-  // (since the non-green primaries in that case all get converted to electricity)
-  // (this ignores demand % because this ratio will remain the same regardless; so green primaries base sum = green primaries adjusted sum for the above,
-  // as demand % = 100, and none of green primaries get electrified)
+  // 1 - max electrification % = unelectrifiable primaries base sum / total adjusted sum = 
+  // unelectrifiable primaries base sum / (unelectrifiable primaries base sum + electric base + electrifiable primaries base sum * electric efficiency)
+  // (since the electrifiable primaries in that case all get converted to electricity)
+  // (this ignores demand % because this ratio will remain the same regardless; so unelectrifiable primaries base sum = unelectrifiable primaries 
+  // adjusted sum for the above, as demand % = 100, and none of unelectrifiable primaries get electrified)
 
-  let greenSumBase = 0;
+  let unelectrifiableSumBase = 0;
   for(let currKey of currSubset.subSubsets.get("primary").primaryPieces.keys()) {
-    if(greenSet.has(currKey)) {
-      greenSumBase += currSubset.subSubsets.get("primary").primaryPieces.get(currKey)["baseVal"];
+    if(greenSet.has(currKey) || exclude.has(currKey)) {
+      unelectrifiableSumBase += currSubset.subSubsets.get("primary").primaryPieces.get(currKey)["baseVal"];
     }
   }
 
-  let ngreenSumBase = currSubset.subSubsets.get("primary")["baseVal"] - greenSumBase;
-  let maxElectrification = 100 * (1 - greenSumBase/(currSubset.subSubsets.get("primary")["baseVal"] - ngreenSumBase 
-    + currSubset.subSubsets.get("electric")["baseVal"] + ngreenSumBase * currSubset["adjustedElecEfficiency"]));
+
+  let electrifiableSumBase = currSubset.subSubsets.get("primary")["baseVal"] - unelectrifiableSumBase;
+  let maxElectrification = 100 * (1 - unelectrifiableSumBase/(currSubset.subSubsets.get("primary")["baseVal"] - electrifiableSumBase 
+    + currSubset.subSubsets.get("electric")["baseVal"] + electrifiableSumBase * currSubset["adjustedElecEfficiency"]));
 
   if(currSubset["adjustedElectrification"] > maxElectrification) {
     currSubset["adjustedElectrification"] = maxElectrification;
@@ -1582,7 +1718,6 @@ function preventGreenElectrification(currSector = null) {
 // For visualizeLegend()
 // Legend is visualized in two sections, green and ngreen, which are printed virtually the same, as below
 function printLegendPiece(green) {
-  // TODO make this work.........
   let currArr = [];
   let currDiv;
   let size = 15;
@@ -1597,7 +1732,13 @@ function printLegendPiece(green) {
   } else {
     for(currColorPiece of colorMap.keys()) { 
       if(currColorPiece !== "electric" && !greenSet.has(currColorPiece)) {
-        currArr.push({"key": currColorPiece});
+        if(!exclude.has(currColorPiece)) {
+          currArr.push({"key": currColorPiece});
+        } else {
+          if(consumption.get("transportation").subSubsets.get("primary").primaryPieces.has(currColorPiece)) {
+            currArr.push({"key": currColorPiece}); // don't visualize exclude-pieces that are not currently active
+          }
+        }
       }
     }
     currDiv = d3.select(".legend > .vis-container.ngreen");
@@ -1607,7 +1748,7 @@ function printLegendPiece(green) {
 
   // TODO: show the extra text only on "wordy" flag enabled - may need to add wordy as a flag to the object above too so it actually regens the 
   // output
-
+  
   currDiv.selectAll("svg")
     .data(currArr)
     .join("svg")
@@ -1643,12 +1784,20 @@ function printLegendPiece(green) {
           }
         });
 
-      console.log(colorMap.get(d.key));
       // sectors & their values for this piece
-      let sectorsPlusElectric = Array.from(consumption.keys());
-      sectorsPlusElectric.push("electric");
+      // if excluded piece, use only the transportation sector
+      let sectors = [];
+      if(exclude.has(currColorPiece)) {
+        sectors.push("transportation");
+      } else {
+        for(let currKey of consumption.keys()) {
+          sectors.push(currKey);
+        }
+        sectors.push("electric");
+      }
+      
       d3.select(this).selectAll(".sector")
-        .data(sectorsPlusElectric) // sectors
+        .data(sectors)
         .join("text")
         .attr("class", "subtitles sector")
         .attr("x", size*2)

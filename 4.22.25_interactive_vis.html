@@ -41,6 +41,20 @@
           </li>
         </ul>
     </div>
+    <div id = "exclude-transportation-select">
+        <text class = "subtitles"> Exclude From Transportation's Electrification? </text>
+        <!-- TODO should residual also be excluded from the other sectors where it's used, or only transportation (ships) -->
+        <ul>
+            <li>
+                <input type = "checkbox" class = "aviation" id = "exclude-aviation-checkbox" value = "aviation" disabled></input>
+                <label for = "exclude-aviation-checkbox"> Aviation (Jet Fuel & Aviation Gasoline) </label>
+            </li>
+            <li>
+                <input type = "checkbox" class = "marine" id = "exclude-marine-checkbox" value = "marine" disabled></input>
+                <label for = "exclude-marine-checkbox"> Marine (Residual Fuel Oil) </label>
+            </li>
+        </ul>
+    </div>
     <br/>
     <div class="container">
         <div class="energy">
