@@ -444,6 +444,17 @@ function updateExcludeTransportationSet(event) {
     }
 
     currPrimaryPieces.get("petroleum")["baseVal"] -= exclude.get(currPiece)["baseVal"];
+
+    let transportationCO2Pieces = co2.map.get("transportation").co2Pieces;
+    transportationCO2Pieces.set(currPiece, new CO2Piece(currPiece));
+    transportationCO2Pieces.get(currPiece)["factor"] = transportationCO2Pieces.get("petroleum")["factor"];
+    transportationCO2Pieces.get(currPiece)["baseVal"] = transportationCO2Pieces.get(currPiece)["factor"] * exclude.get(currPiece)["baseVal"];
+    transportationCO2Pieces.get("petroleum")["baseVal"] = transportationCO2Pieces.get("petroleum")["factor"] * currPrimaryPieces.get("petroleum")["baseVal"];
+    // adjusted CO2 will get recalculated below
+
+    // TODO CO2 map adjustments in pull store CO2 and query formation (skip over the parts that have these exclude vals but still store them)
+    //  + CO2 recalculation adjustments
+    // + deal with legend
   } else { // consolidate back into petroleum
     currPrimaryPieces.delete(currPiece);
     for(let currID of exclude.get(currPiece)["idToVal"].keys()) {
@@ -451,13 +462,16 @@ function updateExcludeTransportationSet(event) {
     }
 
     currPrimaryPieces.get("petroleum")["baseVal"] += exclude.get(currPiece)["baseVal"];
+
+    let transportationCO2Pieces = co2.map.get("transportation").co2Pieces;
+    transportationCO2Pieces.delete(currPiece);
+    transportationCO2Pieces.get("petroleum")["baseVal"] = transportationCO2Pieces.get("petroleum")["factor"] * currPrimaryPieces.get("petroleum")["baseVal"];
   }
 
   // Propagate adjusted vals
   preventGreenElectrification("transportation"); // in case one got moved to unelectrifiable
   calculateStoreAdjustedVals("transportation");
-  console.log("electric of transportation at 459 " + consumption.get("transportation").subSubsets.get("electric")["adjustedVal"]);
-  calculateStoreAdjustedCO2("transportation"); // in case of electrification change
+  calculateStoreAdjustedCO2("transportation"); // in case of electrification change in prevent green electrification
 
   visualizeEnergyData("transportation");
   visualizeCO2Data();
@@ -1176,8 +1190,6 @@ function calculateStoreAdjustedVals(currSector) {
 // Calculates & store the current adjustedVals for the CO2 of passed in sector or electric, based on the current
 // energy & electricity maps
 function calculateStoreAdjustedCO2(currSector) {
-  console.log("1178!!");
-  console.log(currSector);
   let currSubset = co2.map.get(currSector);
 
   for(let currCO2Piece of currSubset.co2Pieces.values()) {
@@ -1187,17 +1199,6 @@ function calculateStoreAdjustedCO2(currSector) {
     } else {
       currCO2Piece["adjustedVal"] = currCO2Piece["factor"] * consumption.get(currSector).subSubsets.get("primary")
         .primaryPieces.get(currCO2Piece["key"])["adjustedVal"];
-
-      if(currSector === "transportation" && currCO2Piece["key"] === "petroleum") { // exclude's pieces also fall under transportation petroleum CO2, if present
-        console.log("1188!");
-        for(let currKey of exclude.keys()) { 
-          if(consumption.get("transportation").subSubsets.get("primary").primaryPieces.has(currKey)) {
-            currCO2Piece["adjustedVal"] += currCO2Piece["factor"] * consumption.get("transportation").subSubsets.get("primary")
-              .primaryPieces.get(currKey)["adjustedVal"]
-              console.log("1192 " + currKey + " " + currCO2Piece["adjustedVal"]);
-          }
-        }
-      }
     }    
     if(currCO2Piece["adjustedVal"] < 0.000001) { // round
       currCO2Piece["adjustedVal"] = 0;
@@ -1577,104 +1578,45 @@ function storeCO2Data(allFullsCO2) {
     }
   }
 
-  // Calculate factors & set adjusted vals to start at base
+  // Calculate factors & set adjusted vals to start at base + set all vals for sectors from advanced exclude settings (marine/aviation)
+  // that don't correspond to IDs, and adjust petroleum's base val based on this
   for(let currSubset of co2.map.values()) {
     for(let currCO2Piece of currSubset.co2Pieces.values()) {
-      if(currSubset["key"] === "electric") {
-        currCO2Piece["factor"] = currCO2Piece["baseVal"] / electricity.get(currCO2Piece["key"])["baseVal"];
-      } else {
-        let currEnergyVal = consumption.get(currSubset["key"]).subSubsets.get("primary").primaryPieces.get(currCO2Piece["key"])["baseVal"];
-
-        if(currSubset["key"] === "transportation" && currCO2Piece === "petroleum") {
-          for(let currKey of exclude.keys()) { 
-            if(consumption.get("transportation").subSubsets.get("primary").primaryPieces.has(currKey)) {
-              currEnergyVal += consumption.get("transportation").subSubsets.get("primary").primaryPieces.get(currKey)["adjustedVal"]
+      if(!exclude.has(currCO2Piece["key"])) {
+        if(currSubset["key"] === "electric") {
+          currCO2Piece["factor"] = currCO2Piece["baseVal"] / electricity.get(currCO2Piece["key"])["baseVal"];
+        } else {
+          let currEnergyVal = consumption.get(currSubset["key"]).subSubsets.get("primary").primaryPieces.get(currCO2Piece["key"])["baseVal"];
+  
+          if(currSubset["key"] === "transportation" && currCO2Piece === "petroleum") {
+            for(let currKey of exclude.keys()) { 
+              if(consumption.get("transportation").subSubsets.get("primary").primaryPieces.has(currKey)) {
+                currEnergyVal += consumption.get("transportation").subSubsets.get("primary").primaryPieces.get(currKey)["adjustedVal"]
+              }
             }
           }
+          currCO2Piece["factor"] = currCO2Piece["baseVal"] / currEnergyVal;
         }
-        currCO2Piece["factor"] = currCO2Piece["baseVal"] / currEnergyVal;
-      }
-      if(isNaN(currCO2Piece["factor"])) {
-        currCO2Piece["factor"] = 0;
-      }
+        if(isNaN(currCO2Piece["factor"])) {
+          currCO2Piece["factor"] = 0;
+        }
 
-      currCO2Piece["adjustedVal"] = currCO2Piece["baseVal"];
+        currCO2Piece["adjustedVal"] = currCO2Piece["baseVal"];
+      }
+    }
+    // after first loop, deal with excludes' influence
+    for(let currKey of exclude.keys()) {
+      if(currSubset["key"] === "transportation" && currSubset.co2Pieces.has(currKey)) {
+        currSubset.co2Pieces.get(currKey)["factor"] = currSubset.co2Pieces.get("petroleum")["factor"];
+        currSubset.co2Pieces.get(currKey)["baseVal"] = consumption.get("transportation").subSubsets.get("primary").primaryPieces.get(currKey)["baseVal"] *
+          currSubset.co2Pieces.get(currKey)["factor"];
+        currSubset.co2Pieces.get(currKey)["adjustedVal"] = currSubset.co2Pieces.get(currKey)["baseVal"];
+
+        currSubset.co2Pieces.get("petroleum")["baseVal"] -= currSubset.co2Pieces.get(currKey)["baseVal"];
+        currSubset.co2Pieces.get("petroleum")["adjustedVal"] -= currSubset.co2Pieces.get(currKey)["adjustedVal"];
+      }
     }
   }
-
-    // TODO if change electricity CO2 storage form, use below:
-    /*
-    // isolate the requested values from the CO2 response & store them in the right spots
-    for(let currFullCO2 of allFullsCO2.response.data) {
-      if(parseInt(currFullCO2.period) != year) {
-        continue; // we fetched several years near current year due to variable API mechanics, so cycle past irrelevant ones
-      }
-  
-      if(currFullCO2["value-units"] !== "million metric tons of CO2" || currFullCO2.stateId !== stateId) { // year & sector ID already checked
-        throw new Error("Unexpected unit or state ID mismatch in pulled API data with " + currFullCO2 + " units " + currFullCO2["value-units"]);
-      }
-  
-      if(currFullCO2.sectorId === consumption.idElecSectorCO2 && currFullCO2.fuelId === consumption.idAllFuelCO2) {
-        // if this is the electric sector val, it needs to be split proportionally & stored in all the elecSector sub-subsets in pieces
-  
-        let postConvert;
-        if(isNaN(parseFloat(currFullCO2.value))) {
-          postConvert = 0;
-        } else {
-          // read in response val
-          postConvert = parseFloat(currFullCO2.value);
-        }
-  
-        let residentialElec = consumption.get("residential").subSubsets.get("elecSector");
-        let commercialElec = consumption.get("commercial").subSubsets.get("elecSector");
-        let industrialElec = consumption.get("industrial").subSubsets.get("elecSector");
-        let transportationElec = consumption.get("transportation").subSubsets.get("elecSector");
-        
-        if(stateOrUS === "state") {
-          let electricTotal = commercialElec.valState + industrialElec.valState + transportationElec.valState + residentialElec.valState;
-  
-          residentialElec.co2State = postConvert * (residentialElec.valState/electricTotal);
-          commercialElec.co2State = postConvert * (commercialElec.valState/electricTotal);
-          industrialElec.co2State = postConvert * (industrialElec.valState/electricTotal);
-          transportationElec.co2State = postConvert * (transportationElec.valState/electricTotal);
-        } else {
-          let electricTotal = commercialElec.valUS + industrialElec.valUS + transportationElec.valUS + residentialElec.valUS;
-  
-          residentialElec.co2US = postConvert * (residentialElec.valUS/electricTotal);
-          commercialElec.co2US = postConvert * (commercialElec.valUS/electricTotal);
-          industrialElec.co2US = postConvert * (industrialElec.valUS/electricTotal);
-          transportationElec.co2US = postConvert * (transportationElec.valUS/electricTotal);
-        }
-      } else { // not EC, so a primary sector's val or primary piece val, find the corresponding sector & its primary sub subset or that sub subset's correct piece
-        for(let currSubset of consumption.values()) {
-          for(let currSubSubset of currSubset.subSubsets.values()) {
-            if(currSubSubset.idSectorCO2 === currFullCO2.sectorId) {
-  
-              let postConvert;
-              if(isNaN(parseFloat(currFullCO2.value))) {
-                postConvert = 0;
-              } else {
-                postConvert = parseFloat(currFullCO2.value);
-              }
-  
-              if(currFullCO2.fuelId === consumption.idAllFuelCO2) { // CO2 of all fuels for this sector  
-                // store read-in val in currSubSubset
-                currSubSubset[accessCO2] = postConvert;
-              } else { // CO2 of some primary piece of fuel for this sector
-                if(currFullCO2.fuelId === consumption.idCoalCO2) {
-                  currSubSubset.primaryPieces.get("coal")[accessCO2] = postConvert;
-                } else if (currFullCO2.fuelId === consumption.idNatGasCO2) {
-                  currSubSubset.primaryPieces.get("natural gas")[accessCO2] = postConvert;
-                } else if (currFullCO2.fuelId === consumption.idPetroleumCO2) {
-                  currSubSubset.primaryPieces.get("petroleum")[accessCO2] = postConvert;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-      */
 }
 
 // For updateSectorSlider(), updateElecEfficiency(), updateGreenSet()
@@ -1748,7 +1690,7 @@ function printLegendPiece(green) {
 
   // TODO: show the extra text only on "wordy" flag enabled - may need to add wordy as a flag to the object above too so it actually regens the 
   // output
-  
+
   currDiv.selectAll("svg")
     .data(currArr)
     .join("svg")
@@ -1817,11 +1759,16 @@ function printLegendPiece(green) {
             } else {
               currPrint += formatCommas(consumption.get(d).subSubsets.get("primary").primaryPieces.get(currColorPiece)["adjustedVal"]) + " primary GWh";
             }
-            if(Array.from(co2.ids.values()).includes(currColorPiece)) {
+            if(Array.from(co2.ids.values()).includes(currColorPiece) || exclude.has(currColorPiece)) {
               let currCO2Sum = 0;
-              for(let currCO2Subset of co2.map.values()) {
-                currCO2Sum += currCO2Subset.co2Pieces.get(currColorPiece)["adjustedVal"];
+              if(!exclude.has(currColorPiece)) {
+                for(let currCO2Subset of co2.map.values()) {
+                  currCO2Sum += currCO2Subset.co2Pieces.get(currColorPiece)["adjustedVal"];
+                }
+              } else {
+                currCO2Sum = co2.map.get("transportation").co2Pieces.get(currColorPiece)["adjustedVal"];
               }
+
               currPrint += ", " + formatCommas(co2.map.get(d).co2Pieces.get(currColorPiece)["adjustedVal"]) + " million metric tons CO2";
             }
           }
