@@ -77,3 +77,13 @@
 .legend .vis-container.ngreen {
     width: 600px;
 }
+
+.tooltip {
+    position: absolute; 
+    z-index: 10; 
+    padding: 10px; 
+    visibility: hidden; 
+    background-color: white; 
+    border: solid; 
+    border-width: 1px;
+}

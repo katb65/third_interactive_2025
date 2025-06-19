@@ -763,7 +763,7 @@ async function pullStoreData() {
     let allFullsImport = await allFullsImportPromise;
     let allFullsCO2 = await allFullsCO2Promise;
   
-    storeSectorData(allFullsEnergy);
+    storeEnergyData(allFullsEnergy);
     storeElectricityData(allFullsElectricity, allFullsImport);
     storeCO2Data(allFullsCO2);
 
@@ -863,6 +863,8 @@ function visualizeEnergyData(currSector = null) {
       .domain(currStacks)
       .range([currLeftMargin, currWidth - currMargin]) 
       .padding(0.1);
+
+    console.log(stackedData);
   
     // Bars
     currSectorBox.select(".vis")
@@ -877,13 +879,76 @@ function visualizeEnergyData(currSector = null) {
           }
         })
       .selectAll("rect")
-        .data(d=>d)
+        .data((d) => {
+          console.log("883: " + d);
+          let currArr = [];
+          for(let currRect of d) {
+            currArr.push({"key": d.key, "rect": currRect});
+          }
+          return currArr;
+        })
         .join("rect")
-        .attr("x", d=>xScale(d.data[0]))
-        .attr("y", d=>yScale(d[1]))
+        .attr("x", d=>xScale(d.rect.data[0]))
+        .attr("y", d=>yScale(d.rect[1]))
         .attr("height", function(d) { 
-          return yScale(d[0]) - yScale(d[1]); })
+          return yScale(d.rect[0]) - yScale(d.rect[1]); 
+        })
         .attr("width", xScale.bandwidth())
+        .on("mouseover", (event, d) => {
+
+          let currRectData = d;
+
+          let tooltip = d3.select(".tooltip");
+
+          tooltip.style("visibility", "visible")
+      
+          tooltip.select(".subheader")
+            .text(currRectData.key);
+
+          tooltip.select(".line-1")
+            .text(() => {
+              console.log(currRectData);
+              if(currRectData.rect.data[0] === "electric") {
+                console.log(currSector);
+                return (formatCommas(consumption.get(currSector).subSubsets.get("electric")["adjustedVal"]) + " GWh");
+              } else {
+                return (formatCommas(consumption.get(currSector).subSubsets.get("primary").primaryPieces.get(currRectData.key)["adjustedVal"]) + "GWh");
+              }
+              
+            });
+
+          tooltip.select(".line-2")
+            .text(() => {
+              if(currRectData.rect.data[0] === "electric") {
+                return (formatCommas((consumption.get(currSector).subSubsets.get("electric")["adjustedVal"] /
+                                    consumption.get(currSector).subSubsets.get("total")["adjustedVal"]) * 100) + "% of " + currSector);
+              } else {
+                return (formatCommas((consumption.get(currSector).subSubsets.get("primary").primaryPieces.get(currRectData.key)["adjustedVal"] /
+                                    consumption.get(currSector).subSubsets.get("total")["adjustedVal"]) * 100) + "% of " + currSector);
+              }
+            });
+        })
+        .on("mousemove", (event, d) => {
+          let tooltip = d3.select(".tooltip");
+
+          let setXTo = event.pageX + 10 + "px";
+          let setYTo = event.pageY - 10;
+      
+          if(event.pageY/window.innerHeight > 0.5) {
+            // "Flip" tooltip if it's over halfway down the page
+            let tooltipSize = tooltip.property("clientHeight");
+            setYTo -= tooltipSize;
+          }
+          setYTo += "px";
+      
+          tooltip.style("top", setYTo)
+            .style("left", setXTo);
+        })
+        .on("mouseout", (event, d) => {
+          let tooltip = d3.select(".tooltip");
+
+          tooltip.style("visibility", "hidden");
+        });
   
     // X-axis
     currSectorBox.select(".vis")
@@ -1009,8 +1074,55 @@ function visualizeElectricityData() {
         } else {
           return colorMap.get(d.data.key)["ngreen"];
         }
-     });
-     // TODO tooltip
+     })
+     .on("mouseover", (event, d) => {
+
+      let currRectData = d.data;
+
+      let tooltip = d3.select(".tooltip");
+
+      tooltip.style("visibility", "visible")
+  
+      tooltip.select(".subheader")
+        .text(currRectData.key);
+
+      tooltip.select(".line-1")
+        .text(() => {
+          console.log(currRectData);
+          return (formatCommas(currRectData.val) + " GWh");
+        });
+
+      tooltip.select(".line-2")
+        .text(() => {
+          let currElectricitySum = 0;
+          for(let currElecPiece of electricity.values()) {
+            currElectricitySum += currElecPiece["adjustedVal"];
+          }
+
+          return (formatCommas((currRectData.val / currElectricitySum) * 100) + "%");
+        });
+    })
+    .on("mousemove", (event, d) => {
+      let tooltip = d3.select(".tooltip");
+
+      let setXTo = event.pageX + 10 + "px";
+      let setYTo = event.pageY - 10;
+  
+      if(event.pageY/window.innerHeight > 0.5) {
+        // "Flip" tooltip if it's over halfway down the page
+        let tooltipSize = tooltip.property("clientHeight");
+        setYTo -= tooltipSize;
+      }
+      setYTo += "px";
+  
+      tooltip.style("top", setYTo)
+        .style("left", setXTo);
+    })
+    .on("mouseout", (event, d) => {
+      let tooltip = d3.select(".tooltip");
+
+      tooltip.style("visibility", "hidden");
+    });
 }
 
 // Visualize & print relevant text for the CO2 output
@@ -1033,7 +1145,7 @@ function visualizeCO2Data() {
   for(let currSubset of co2.map.values()) {
     let currPush = {"sector": currSubset["key"], "children": []};
     for(let currCO2Piece of currSubset.co2Pieces.values()) {
-      currPush.children.push({"key": currCO2Piece["key"], "val": currCO2Piece["adjustedVal"]});
+      currPush.children.push({"sector": currSubset["key"], "key": currCO2Piece["key"], "val": currCO2Piece["adjustedVal"]});
     }
 
     currJson.children[0].children.push(currPush);
@@ -1066,6 +1178,58 @@ function visualizeCO2Data() {
         } else {
           return colorMap.get(d.data.key)["ngreen"];
         }
+    })
+    .on("mouseover", (event, d) => {
+
+      let currRectData = d.data;
+
+      console.log("899 " + d.key + " " + d.rect);
+
+      let tooltip = d3.select(".tooltip");
+
+      tooltip.style("visibility", "visible")
+  
+      tooltip.select(".subheader")
+        .text(currRectData.sector + " " + currRectData.key);
+
+      console.log("908 " + d.key + " " + d.rect);
+
+      tooltip.select(".line-1")
+        .text(() => {
+          return (formatCommas(currRectData.val) + " Million Metric Tons");
+        });
+
+      tooltip.select(".line-2")
+        .text(() => {
+          let currCO2Sum = 0;
+          for(let currCO2Piece of co2.map.get(currRectData.sector).co2Pieces.values()) {
+            console.log("1206 " + currCO2Piece);
+            currCO2Sum += currCO2Piece["adjustedVal"];
+          }
+
+          return (formatCommas((currRectData.val / currCO2Sum) * 100) + "% of " + currRectData.sector);
+        });
+    })
+    .on("mousemove", (event, d) => {
+      let tooltip = d3.select(".tooltip");
+
+      let setXTo = event.pageX + 10 + "px";
+      let setYTo = event.pageY - 10;
+  
+      if(event.pageY/window.innerHeight > 0.5) {
+        // "Flip" tooltip if it's over halfway down the page
+        let tooltipSize = tooltip.property("clientHeight");
+        setYTo -= tooltipSize;
+      }
+      setYTo += "px";
+  
+      tooltip.style("top", setYTo)
+        .style("left", setXTo);
+    })
+    .on("mouseout", (event, d) => {
+      let tooltip = d3.select(".tooltip");
+
+      tooltip.style("visibility", "hidden");
     });
 }
 
@@ -1303,7 +1467,7 @@ function composeQueryString(queryType, query, stateId, start, end) {
 // For pullStoreData()
 // Dissects & stores EIA API response data for in the sector energy values map for the current-set year & state
 // If no data for some value, assumes it 0
-function storeSectorData(allFullsEnergy) {  
+function storeEnergyData(allFullsEnergy) {  
     console.log(allFullsEnergy);
     // Set all vals as 0 to avoid leftover prior values in case of data gaps + adjustedElecEfficiency back to its base val
     for(let currSubset of consumption.values()) {
