@@ -289,6 +289,7 @@ let formatCommas = d3.format(",.2f");
 // Whether to display energy data in GW or GWh (one is more intuitive to renewable energy formats, the other to
 // consumable energy formats; adjusted with user's selection)
 let GWhorGW = "GWh";
+let GWhorGWDivisor = 1; // when above is GW, this is set to 365*24
 
 // Color map
 // Each piece will correspond to the same hue of color across sectors, but will be lighter shade if declared green by user than if not
@@ -405,12 +406,17 @@ async function updateYear() {
 
 // Called on user change of GW vs GWh display selection, changes GWhorGW and updates text output
 function updateGWhorGW() {
-  //TODO
-    /*
   GWhorGW = d3.select("#GWh-or-GW-drop").property("value");
+  if(GWhorGW === "GWh") {
+    GWhorGWDivisor = 1;
+  } else {
+    GWhorGWDivisor = 365*24;
+  }
 
-  visualizeStateData();
-  */
+  visualizeEnergyData();
+  visualizeElectricityData();
+  visualizeCO2Data();
+  visualizeLegend();
 }
 
 // Called on user change of what pieces count as green
@@ -806,7 +812,7 @@ function visualizeEnergyData(currSector = null) {
 
   // Display total
   d3.select(".container .titles")
-    .text("Energy Consumed: " + formatCommas(fullTotal) + " GWh");
+    .text("Energy Consumed: " + formatCommas(fullTotal/GWhorGWDivisor) + " " + GWhorGW);
 
   // Do main visualization
   if(currSector === null) {
@@ -925,9 +931,10 @@ function visualizeEnergyData(currSector = null) {
           tooltip.select(".line-1")
             .text((d) => {
               if(currRectData.key === "electric") {
-                return (formatCommas(consumption.get(currSector).subSubsets.get("electric")["adjustedVal"]) + " GWh");
+                return (formatCommas((consumption.get(currSector).subSubsets.get("electric")["adjustedVal"])/GWhorGWDivisor) + " " + GWhorGW);
               } else {
-                return (formatCommas(consumption.get(currSector).subSubsets.get("primary").primaryPieces.get(currRectData.key)["adjustedVal"]) + " GWh");
+                return (formatCommas((consumption.get(currSector).subSubsets.get("primary").primaryPieces.get(currRectData.key)["adjustedVal"])
+                  /GWhorGWDivisor) + " " + GWhorGW);
               }
               
             });
@@ -997,16 +1004,17 @@ function visualizeElectricityData() {
     let currHTMLKey = currElectricityPiece.key.replace(/\s+/, '-');
     let currPieceBox = electricityBox.select(".input-container.type-piece-" + currHTMLKey);
     currPieceBox.select(".slider").property("value", currElectricityPiece["adjustedDemand"]);
-    currPieceBox.select(".slider-output").text(currElectricityPiece["adjustedDemand"] + "% --- " + formatCommas(currElectricityPiece["adjustedVal"]) + " GWh")
+    currPieceBox.select(".slider-output").text(currElectricityPiece["adjustedDemand"] + "% --- " + 
+      formatCommas(currElectricityPiece["adjustedVal"]/GWhorGWDivisor) + " " + GWhorGW);
   }
 
   // Other
   let otherBox = electricityBox.select(".output-container.type-piece-other");
-  otherBox.select(".output").text(formatCommas(elecOther["baseVal"]) + " GWh");
+  otherBox.select(".output").text(formatCommas(elecOther["baseVal"]/GWhorGWDivisor) + " " + GWhorGW);
 
   // Imports
   let importBox = electricityBox.select(".output-container.type-piece-import");
-  importBox.select(".output").text(formatCommas(elecImport["baseVal"]) + " GWh");
+  importBox.select(".output").text(formatCommas(elecImport["baseVal"]/GWhorGWDivisor) + " " + GWhorGW);
 
   // Transmission efficiency
   let transEffBox = electricityBox.select(".input-container.type-transmission-efficiency");
@@ -1030,11 +1038,11 @@ function visualizeElectricityData() {
   currGeneration += elecImport["baseVal"];
 
   if(currDemand >= 0) {
-    electricityBox.select(".demand-output").text("Demand remaining to fill: " + formatCommas(currDemand) + " GWh");
+    electricityBox.select(".demand-output").text("Demand remaining to fill: " + formatCommas(currDemand/GWhorGWDivisor) + " " + GWhorGW);
   } else {
-    electricityBox.select(".demand-output").text("Over demand by: " + formatCommas(-currDemand) + " GWh");
+    electricityBox.select(".demand-output").text("Over demand by: " + formatCommas(-currDemand/GWhorGWDivisor) + " " + GWhorGW);
   }
-  electricityBox.select(".generation-output").text("Electricity Generation & Import: " + formatCommas(currGeneration) + " GWh");
+  electricityBox.select(".generation-output").text("Electricity Generation & Import: " + formatCommas(currGeneration/GWhorGWDivisor) + " " + GWhorGW);
 
   // Visualize (without other or import)
   // Set up JSON object of values to visualize
@@ -1108,7 +1116,7 @@ function visualizeElectricityData() {
       tooltip.select(".line-1")
         .text((d) => {
           console.log(currRectData);
-          return (formatCommas(currRectData.val) + " GWh");
+          return (formatCommas(currRectData.val/GWhorGWDivisor) + " " + GWhorGW);
         });
 
       tooltip.select(".line-2")
@@ -1295,6 +1303,8 @@ function disableUserInput() {
         .property("disabled", true);
     d3.selectAll(".cell .slider")
         .property("disabled", true);
+    d3.selectAll(".electricity .slider")
+        .property("disabled", true);
 }
 
 // For initialize(), updateState(), updateYear(), TODO
@@ -1313,6 +1323,8 @@ function enableUserInput() {
     d3.select("#show-efficiencies").select("input")
         .attr("disabled", null);
     d3.selectAll(".cell .slider")
+        .attr("disabled", null);
+    d3.selectAll(".electricity .slider")
         .attr("disabled", null);
 }
 
@@ -1935,14 +1947,15 @@ function printLegendPiece(green) {
             currPrint += d.split(" ").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ") + ": ";
             if(d === "electric") {
               if(currColorPiece === "other") {
-                currPrint += formatCommas(elecOther["adjustedVal"]) + " GWh";
+                currPrint += formatCommas(elecOther["adjustedVal"]/GWhorGWDivisor) + " " + GWhorGW;
               } else {
-                currPrint += formatCommas(electricity.get(currColorPiece)["adjustedVal"]) + " GWh";
+                currPrint += formatCommas(electricity.get(currColorPiece)["adjustedVal"]/GWhorGWDivisor) + " " + GWhorGW;
               }
             } else if(currColorPiece === "nuclear") {
-              currPrint += "0 primary GWh";
+              currPrint += "0 primary " + GWhorGW;
             } else {
-              currPrint += formatCommas(consumption.get(d).subSubsets.get("primary").primaryPieces.get(currColorPiece)["adjustedVal"]) + " primary GWh";
+              currPrint += formatCommas((consumption.get(d).subSubsets.get("primary").primaryPieces.get(currColorPiece)["adjustedVal"])
+                /GWhorGWDivisor) + " primary " + GWhorGW;
             }
             if(Array.from(co2.ids.values()).includes(currColorPiece) || exclude.has(currColorPiece)) {
               let currCO2Sum = 0;
