@@ -1,26 +1,65 @@
-.container {
-    display: inline-block;
+.titles {
+    font-family: tahoma, sans-serif;
+    font-size: 16px;
+    font-weight: bold;
 }
 
-.container .vis-container {
+.subtitles {
+    font-family: tahoma, sans-serif; 
+    font-size: 14px;
+}
+
+.regular-text {
+    font-family: 'Times New Roman', serif;
+    font-size: 12px;
+}
+
+.mini-text {
+    font-family: Georgia, serif;
+    font-size: 10px;
+}
+
+.header {
+    padding: 10px;
+}
+
+.container {
     display: inline-block;
+    padding: 10px;
+    height: 570px;
+    vertical-align: top;
+}
+
+.energy, .electricity, .co2 {
+    position: relative;
+    height: 100%;
+}
+
+fieldset {
+    max-width: max-content; 
+    padding: 20px;
+    border-width: 1px;
+    border-color: black;
 }
 
 .energy {
+    width: 510px;
+}
+
+.energy .grid {
+    position: absolute;
+    bottom: 0;
+    left: 0;
     display: grid;
-    grid-template-columns: 300px 300px;
-    grid-template-rows: 300px 300px;
-    grid-gap: 20px 20px;
+    grid-template-columns: 250px 250px;
+    grid-template-rows: 250px 250px;
+    gap: 10px 10px;
     justify-content: left;
-    padding: 20px;
 }
 
 .cell {
     background-color: lightblue;
-}
-
-.electricity > div {
-    display: inline-block;
+    padding: 10px;
 }
 
 .input-container * {
@@ -32,13 +71,17 @@
 }
 
 .energy .vis-container {
-    width: 300px; 
-    height: 150px;
+    width: 250px; 
+    height: 100px;
 }
 
 .energy .vis {
-    width: 300px; 
-    height: 150px;
+    width: 250px; 
+    height: 100px;
+}
+
+.electricity {
+    width: 500px;
 }
 
 .electricity .input-container {
@@ -46,36 +89,63 @@
 }
 
 .electricity .vis-container {
-    width: 250px;
-    height: 300px;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 500px;
+    height: 250px;
 }
 
 .electricity .vis {
-    width: 250px;
-    height: 300px;
+    width: 500px;
+    height: 250px;
 }
 
 .electricity .slider-output {
-    text-anchor: end;
+    text-align: right;
     /* TODO make this work lol */
 }
 
-.co2 .vis-container {
+.co2 {
     width: 300px;
-    height: 1000px;
+}
+
+.co2 .vis-container {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 300px;
+    height: 510px;
 }
 
 .co2 .vis {
     width: 300px;
-    height: 1000px;
+    height: 510px;
 }
 
-.legend .vis-container.green {
+.legend .vis-container svg {
+    display: inline-block;
+}
+
+.legend .vis-container.green svg {
     width: 300px;
 }
 
-.legend .vis-container.ngreen {
+.legend .vis-container.ngreen svg {
     width: 600px;
+}
+
+.slider {
+    height: 0.5em;
+    accent-color: black;
+}
+
+.energy .slider {
+    width: 50%;
+}
+
+.electricity .slider {
+    width: 30%;
 }
 
 .tooltip {
@@ -86,4 +156,8 @@
     background-color: white; 
     border: solid; 
     border-width: 1px;
+}
+
+.type-elec-efficiency, .type-transmission-efficiency {
+    display: none;
 }

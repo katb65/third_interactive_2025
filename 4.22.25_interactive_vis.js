@@ -178,7 +178,6 @@ class CO2Piece {
 
 // To store pieces of the CO2 data in separate objects
 // Contains map to further pieces that hold the values (initial & adjusted based on user's adjustments of energy/electricity sources)
-// TODO: should this be reworked so that electric is proportionally contained as parts of all the other subsets..? (and all the fuel subpieces associated...?)
 class CO2Subset {
   key; // ex. "residential"
   id; // id for this CO2 sector
@@ -271,10 +270,10 @@ co2.ids.set("CO", "coal");
 co2.ids.set("NG", "natural gas");
 co2.ids.set("PE", "petroleum");
 
-co2.map.set("residential", new CO2Subset("residential", "RC"));
-co2.map.set("commercial", new CO2Subset("commercial", "CC"));
 co2.map.set("industrial", new CO2Subset("industrial", "IC"));
 co2.map.set("transportation", new CO2Subset("transportation", "TC"));
+co2.map.set("commercial", new CO2Subset("commercial", "CC"));
+co2.map.set("residential", new CO2Subset("residential", "RC"));
 co2.map.set("electric", new CO2Subset("electric", "EC"));
 
 // Set of primary pieces considered green
@@ -350,6 +349,9 @@ d3.select("#green-select").selectAll("input")
 
 d3.select("#exclude-transportation-select").selectAll("input")
   .on("change", (event) => updateExcludeTransportationSet(event));
+
+d3.select("#show-efficiencies").select("input")
+  .on("change", (event) => updateShowEfficiencies(event));
 
 d3.selectAll(".cell > .input-container.type-demand,.input-container.type-electrification > .slider")
   .on("change", (event) => updateSectorSlider(event));
@@ -476,6 +478,18 @@ function updateExcludeTransportationSet(event) {
   visualizeEnergyData("transportation");
   visualizeCO2Data();
   visualizeLegend();
+}
+
+// Called on user clicking efficiency sliders' checkbox
+function updateShowEfficiencies(event) {
+  // Show or don't show the slider: values are already loaded in
+  if(d3.select(event.target).property("checked")) {
+    d3.selectAll(".type-elec-efficiency").style("display", "contents");
+    d3.selectAll(".type-transmission-efficiency").style("display", "contents");
+  } else {
+    d3.selectAll(".type-elec-efficiency").style("display", "none");
+    d3.selectAll(".type-transmission-efficiency").style("display", "none");
+  }
 }
 
 // Called on user sliding a demand or electrification % slider within a sector box, changes & reprints corresponding internal data
@@ -775,9 +789,11 @@ async function pullStoreData() {
 function visualizeEnergyData(currSector = null) {
   // Calculate & compare upper bar graph bound
   let maxTotal = 0;
+  let fullTotal = 0;
   for(let currSubset of consumption.values()) {
     maxTotal = Math.max(maxTotal, roundUpOneSigFig(currSubset.subSubsets.get("electric")["adjustedVal"]));
     maxTotal = Math.max(maxTotal, roundUpOneSigFig(currSubset.subSubsets.get("primary")["adjustedVal"]));
+    fullTotal += currSubset.subSubsets.get("total")["adjustedVal"];
   }
   if(maxTotal != currEnergyBound) {
     currEnergyBound = maxTotal;
@@ -787,6 +803,10 @@ function visualizeEnergyData(currSector = null) {
       return;
     }
   }
+
+  // Display total
+  d3.select(".container .titles")
+    .text("Energy Consumed: " + formatCommas(fullTotal) + " GWh");
 
   // Do main visualization
   if(currSector === null) {
@@ -816,13 +836,13 @@ function visualizeEnergyData(currSector = null) {
 
     // Layout number specifics
     let currMargin = 20;
-    let currLeftMargin = 60;
+    let currLeftMargin = 70;
     let currHeight = parseInt(d3.select(".cell .vis").style("height").slice(0, -2));
     let currWidth = parseInt(d3.select(".cell .vis").style("width").slice(0, -2));
 
     // Create object usable by the vis
     let currData = [];
-    let currStacks = ["electric", "primary"];
+    let currStacks = ["Electric", "Primary"];
 
     // We need the groups key array to have all not green, then all green, so that the stack has them in separate chunks
     let currGroups = [];
@@ -838,12 +858,10 @@ function visualizeEnergyData(currSector = null) {
     }
     currGroups.push("electric");
 
-    currData.push({stack: "electric", group: "electric", val: currSectorObj.subSubsets.get("electric")["adjustedVal"]}) 
+    currData.push({stack: "Electric", group: "electric", val: currSectorObj.subSubsets.get("electric")["adjustedVal"]}) 
     for(let currKey of currPrimaryPieces.keys()) {
-      currData.push({"stack": "primary", "group": currKey, "val": currPrimaryPieces.get(currKey)["adjustedVal"]})
+      currData.push({"stack": "Primary", "group": currKey, "val": currPrimaryPieces.get(currKey)["adjustedVal"]})
     }
-
-    console.log("electric of transportation at 831 " + consumption.get("transportation").subSubsets.get("electric")["adjustedVal"]);
 
     let stackedData = d3.stack()
       .keys(currGroups)
@@ -880,7 +898,6 @@ function visualizeEnergyData(currSector = null) {
         })
       .selectAll("rect")
         .data((d) => {
-          console.log("883: " + d);
           let currArr = [];
           for(let currRect of d) {
             currArr.push({"key": d.key, "rect": currRect});
@@ -902,29 +919,29 @@ function visualizeEnergyData(currSector = null) {
 
           tooltip.style("visibility", "visible")
       
-          tooltip.select(".subheader")
-            .text(currRectData.key);
+          tooltip.select(".subtitles")
+            .text((d) => {return currRectData.key.split(" ").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ")});
 
           tooltip.select(".line-1")
-            .text(() => {
-              console.log(currRectData);
-              if(currRectData.rect.data[0] === "electric") {
-                console.log(currSector);
+            .text((d) => {
+              if(currRectData.key === "electric") {
                 return (formatCommas(consumption.get(currSector).subSubsets.get("electric")["adjustedVal"]) + " GWh");
               } else {
-                return (formatCommas(consumption.get(currSector).subSubsets.get("primary").primaryPieces.get(currRectData.key)["adjustedVal"]) + "GWh");
+                return (formatCommas(consumption.get(currSector).subSubsets.get("primary").primaryPieces.get(currRectData.key)["adjustedVal"]) + " GWh");
               }
               
             });
 
           tooltip.select(".line-2")
-            .text(() => {
-              if(currRectData.rect.data[0] === "electric") {
+            .text((d) => {
+              if(currRectData.key === "electric") {
                 return (formatCommas((consumption.get(currSector).subSubsets.get("electric")["adjustedVal"] /
-                                    consumption.get(currSector).subSubsets.get("total")["adjustedVal"]) * 100) + "% of " + currSector);
+                                    consumption.get(currSector).subSubsets.get("total")["adjustedVal"]) * 100) + "% of " 
+                                    + currSector.split(" ").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" "));
               } else {
                 return (formatCommas((consumption.get(currSector).subSubsets.get("primary").primaryPieces.get(currRectData.key)["adjustedVal"] /
-                                    consumption.get(currSector).subSubsets.get("total")["adjustedVal"]) * 100) + "% of " + currSector);
+                                    consumption.get(currSector).subSubsets.get("total")["adjustedVal"]) * 100) + "% of " + 
+                                    currSector.split(" ").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" "));
               }
             });
         })
@@ -954,12 +971,14 @@ function visualizeEnergyData(currSector = null) {
     currSectorBox.select(".vis")
       .append("g")
       .attr("transform", "translate(0, " + (currHeight - currMargin) + ")")
+      .attr("class", "mini-text")
       .call(d3.axisBottom(xScale).tickSizeOuter(0));
   
     // Y-axis
     currSectorBox.select(".vis")
       .append("g")
       .attr("transform", "translate(" + currLeftMargin + ", 0)")
+      .attr("class", "mini-text")
       .call(d3.axisLeft(yScale).tickValues([0, currEnergyBound]));
   }
 }
@@ -1083,17 +1102,17 @@ function visualizeElectricityData() {
 
       tooltip.style("visibility", "visible")
   
-      tooltip.select(".subheader")
-        .text(currRectData.key);
+      tooltip.select(".subtitles")
+        .text((d) => {return currRectData.key.split(" ").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ")});
 
       tooltip.select(".line-1")
-        .text(() => {
+        .text((d) => {
           console.log(currRectData);
           return (formatCommas(currRectData.val) + " GWh");
         });
 
       tooltip.select(".line-2")
-        .text(() => {
+        .text((d) => {
           let currElectricitySum = 0;
           for(let currElecPiece of electricity.values()) {
             currElectricitySum += currElecPiece["adjustedVal"];
@@ -1134,7 +1153,7 @@ function visualizeCO2Data() {
       currCO2Total += currCO2Piece["adjustedVal"];
     }
   }
-  d3.select(".co2 .subheader").text("CO2: " + formatCommas(currCO2Total) + " Million Metric Tons");
+  d3.select(".co2 .titles").text("CO2: " + formatCommas(currCO2Total) + " Million Metric Tons");
 
   // Visualize
   let currJson = {
@@ -1189,25 +1208,27 @@ function visualizeCO2Data() {
 
       tooltip.style("visibility", "visible")
   
-      tooltip.select(".subheader")
-        .text(currRectData.sector + " " + currRectData.key);
+      tooltip.select(".subtitles")
+        .text((d) => {return currRectData.sector.split(" ").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ") + 
+          " " + currRectData.key.split(" ").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ")});
 
       console.log("908 " + d.key + " " + d.rect);
 
       tooltip.select(".line-1")
-        .text(() => {
+        .text((d) => {
           return (formatCommas(currRectData.val) + " Million Metric Tons");
         });
 
       tooltip.select(".line-2")
-        .text(() => {
+        .text((d) => {
           let currCO2Sum = 0;
           for(let currCO2Piece of co2.map.get(currRectData.sector).co2Pieces.values()) {
             console.log("1206 " + currCO2Piece);
             currCO2Sum += currCO2Piece["adjustedVal"];
           }
 
-          return (formatCommas((currRectData.val / currCO2Sum) * 100) + "% of " + currRectData.sector);
+          return (formatCommas((currRectData.val / currCO2Sum) * 100) + "% of " + 
+            currRectData.sector.split(" ").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" "));
         });
     })
     .on("mousemove", (event, d) => {
@@ -1270,6 +1291,8 @@ function disableUserInput() {
         .property("disabled", true);
     d3.select("#exclude-transportation-select").selectAll("input")
         .property("disabled", true);
+    d3.select("#show-efficiencies").select("input")
+        .property("disabled", true);
     d3.selectAll(".cell .slider")
         .property("disabled", true);
 }
@@ -1286,6 +1309,8 @@ function enableUserInput() {
     d3.select("#green-select").selectAll("input")
         .attr("disabled", null);
     d3.select("#exclude-transportation-select").selectAll("input")
+        .attr("disabled", null);
+    d3.select("#show-efficiencies").select("input")
         .attr("disabled", null);
     d3.selectAll(".cell .slider")
         .attr("disabled", null);
@@ -1852,13 +1877,9 @@ function printLegendPiece(green) {
   console.log(currArr);
   console.log(currDiv);
 
-  // TODO: show the extra text only on "wordy" flag enabled - may need to add wordy as a flag to the object above too so it actually regens the 
-  // output
-
   currDiv.selectAll("svg")
     .data(currArr)
     .join("svg")
-    .attr("width", parseInt(currDiv.style("width").slice(0, -2)))
     .attr("height", (d) => { return size*8 + Array.from(consumption.keys()).length; })
     .each(function(d,i) { // passes each existing svg's data down into itself to create squares & text
       let currColorPiece = d.key;
@@ -1872,7 +1893,7 @@ function printLegendPiece(green) {
         .attr("x", size*2)
         .attr("y", (d) => {return size*2;}
         )
-        .text(d=>d);
+        .text(d=>d.split(" ").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" "));
 
       // square
       d3.select(this).selectAll("rect")
@@ -1905,13 +1926,13 @@ function printLegendPiece(green) {
       d3.select(this).selectAll(".sector")
         .data(sectors)
         .join("text")
-        .attr("class", "subtitles sector")
+        .attr("class", "regular-text sector")
         .attr("x", size*2)
         .attr("y", (d, i) => { return (i+1)*(size + 2) + size*2})
         .text((d) => {
           let currPrint = "";
           if(currColorPiece !== "electric") {
-            currPrint += d + ": ";
+            currPrint += d.split(" ").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ") + ": ";
             if(d === "electric") {
               if(currColorPiece === "other") {
                 currPrint += formatCommas(elecOther["adjustedVal"]) + " GWh";

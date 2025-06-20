@@ -13,255 +13,290 @@
 </head>
 
 <body>
-    <div id = "state-select"></div>
-        <label class = "subtitles" for="state-select-drop">State:
-        <select name="state-select-drop" id="state-select-drop" disabled></select></label>
+    <div class = "header">
+        <div id = "state-select">
+            <label class = "subtitles" for="state-select-drop">State:
+            <select name="state-select-drop" id="state-select-drop" class = "regular-text" disabled></select></label>
+        </div>
+        <div id = "year-select">
+            <label class = "subtitles" for="year-select-drop">Year:
+            <select name="year-select-drop" id="year-select-drop" class = "regular-text" disabled></select></label>
+        </div>
+        <br/>
+        <details>
+            <summary class = "subtitles" > Advanced Variables: </summary>
+            <fieldset>
+                <div id = "GWh-or-GW">
+                    <label for="GWH-or-GW-drop" class = "subtitles" >Units:
+                    <select name = "GWh-or-GW-drop" id = "GWh-or-GW-drop" class = "regular-text" disabled>
+                        <option value = "GWh" selected>GWh</option>
+                        <option value = "GW">GW</option>
+                    </select></label>
+                </div>
+                <br/>
+                <div id = "green-select">
+                    <text class = "subtitles" > Is It Green? </text>
+                    <ul>
+                    <li> 
+                        <input type = "checkbox" class = "nuclear" value = "nuclear" id = "green-nuclear-checkbox" checked disabled></input>
+                        <label for = "green-nuclear-checkbox" class = "regular-text" > Nuclear </label>
+                    </li>
+                    <li> 
+                        <input type = "checkbox" class = "hydroelectric" id = "green-hydroelectric-checkbox" value = "hydroelectric" checked disabled></input>
+                        <label for = "green-hydroelectric-checkbox" class = "regular-text" > Hydroelectric </label>
+                    </li>
+                    </ul>
+                </div>
+                <div id = "exclude-transportation-select">
+                    <text class = "subtitles"> Exclude From Transportation's Electrification? </text>
+                    <!-- TODO should residual also be excluded from the other sectors where it's used, or only transportation (ships) -->
+                    <ul>
+                        <li>
+                            <input type = "checkbox" class = "aviation" id = "exclude-aviation-checkbox" value = "aviation" disabled></input>
+                            <label for = "exclude-aviation-checkbox" class = "regular-text" > Aviation (Jet Fuel & Aviation Gasoline) </label>
+                        </li>
+                        <li>
+                            <input type = "checkbox" class = "marine" id = "exclude-marine-checkbox" value = "marine" disabled></input>
+                            <label for = "exclude-marine-checkbox" class = "regular-text" > Marine (Residual Fuel Oil) </label>
+                        </li>
+                    </ul>
+                </div>
+                <div id = "show-efficiencies">
+                    <input type = "checkbox" class = "show-efficiencies" id = "show-efficiencies-checkbox" disabled></input>
+                    <label for = "show-efficiencies-checkbox" class = "subtitles" > Show Efficiencies? </label>
+                </div>
+            </fieldset>
+        </details>
     </div>
-    <div id = "year-select">
-        <label class = "subtitles" for="year-select-drop">Year:
-        <select name="year-select-drop" id="year-select-drop" disabled></select></label>
-    </div>
-    <div id = "GWh-or-GW">
-        <label for="GWH-or-GW-drop" class = "subtitles" >Units:
-        <select name = "GWh-or-GW-drop" id = "GWh-or-GW-drop" disabled>
-            <option value = "GWh" selected>GWh</option>
-            <option value = "GW">GW</option>
-        </select></label>
-    </div>
-    <div id = "green-select">
-        <text class = "subtitles" > Is It Green? </text>
-        <ul>
-          <li> 
-            <input type = "checkbox" class = "nuclear" value = "nuclear" id = "green-nuclear-checkbox" checked disabled></input>
-            <label for = "green-nuclear-checkbox"> Nuclear </label>
-          </li>
-          <li> 
-            <input type = "checkbox" class = "hydroelectric" id = "green-hydroelectric-checkbox" value = "hydroelectric" checked disabled></input>
-            <label for = "green-hydroelectric-checkbox"> Hydroelectric </label>
-          </li>
-        </ul>
-    </div>
-    <div id = "exclude-transportation-select">
-        <text class = "subtitles"> Exclude From Transportation's Electrification? </text>
-        <!-- TODO should residual also be excluded from the other sectors where it's used, or only transportation (ships) -->
-        <ul>
-            <li>
-                <input type = "checkbox" class = "aviation" id = "exclude-aviation-checkbox" value = "aviation" disabled></input>
-                <label for = "exclude-aviation-checkbox"> Aviation (Jet Fuel & Aviation Gasoline) </label>
-            </li>
-            <li>
-                <input type = "checkbox" class = "marine" id = "exclude-marine-checkbox" value = "marine" disabled></input>
-                <label for = "exclude-marine-checkbox"> Marine (Residual Fuel Oil) </label>
-            </li>
-        </ul>
-    </div>
-    <br/>
     <div class="container">
         <div class="energy">
-            <div class="cell sector-industrial">
-                <p class = "subheader"> Industrial </p>
-                <div class = "vis-container">
-                    <svg class = "vis"></svg>
+            <p class = "titles"> Energy </p>
+            <div class ="grid">
+                <div class="cell sector-industrial">
+                    <text class = "subtitles"> Industrial </text>
+                    <div class = "vis-container">
+                        <svg class = "vis"></svg>
+                    </div>
+                    <br/>
+                    <div class="input-container type-elec-efficiency" >
+                        <text class = "regular-text"> Electric Efficiency: </text><br/>
+                        <text class = "regular-text"> 0 </text>
+                        <input class = "slider" type="range" min="0" max = "1" step="any" disabled></input>
+                        <text class = "regular-text"> 1 </text>
+                        <text class = "regular-text slider-output"> </text>
+                    </div>
+                    <div class="input-container type-demand">
+                        <!-- TODO add text input box for precision? will need to filter out non numeric input + trigger slider event -->
+                        <!-- TODO blurbs saying demand % inc's efffactor (by amt of things using it) whereas electrification % doesn't (by GWh)-->
+                        <text class = "regular-text"> Demand: </text><br/>
+                        <text class = "regular-text"> 0% </text>
+                        <input  class = "slider" type="range" min = "0" max = "500" value = "100" step = "1" disabled></input>
+                        <text class = "regular-text"> 500% &nbsp;&nbsp;&nbsp; </text>
+                        <text class = "regular-text slider-output"> </text>
+                    </div>
+                    <div class="input-container type-electrification">
+                        <text class = "regular-text"> Electrification: </text><br/>
+                        <text class = "regular-text"> 0% </text>
+                        <input class = "slider"  type="range" min = "0" max = "100" value = "0" step = "1" disabled></input>
+                        <text class = "regular-text"> 100% &nbsp;&nbsp;&nbsp; </text>
+                        <text class = "regular-text slider-output"> </text>
+                    </div>
                 </div>
-                <!-- TODO move this into a hidden blurb -->
-                <div class="input-container type-elec-efficiency">
-                    <p> 0 </p>
-                    <input class = "slider" type="range" min="0" max = "1" step="any" disabled></input>
-                    <p> 1 </p>
-                    <p class = "slider-output"> </p>
+                <div class="cell sector-transportation">
+                    <text class = "subtitles"> Transportation </text>
+                    <div class = "vis-container">
+                        <svg class = "vis"></svg>
+                    </div>
+                    <br/>
+                    <div class="input-container type-elec-efficiency">
+                        <text class = "regular-text"> Electric Efficiency: </text><br/>
+                        <text class = "regular-text"> 0 </text>
+                        <input class = "slider" type="range" min="0" max = "1" step="any" disabled></input>
+                        <text class = "regular-text"> 1 </text>
+                        <text class = "regular-text slider-output"> </text>
+                    </div>
+                    <div class="input-container type-demand">
+                        <text class = "regular-text"> Demand: </text><br/>
+                        <text class = "regular-text"> 0% </text>
+                        <input class = "slider"  type="range" min = "0" max = "500" value = "100" step = "1" disabled></input>
+                        <text class = "regular-text"> 500% &nbsp;&nbsp;&nbsp; </text>
+                        <text class = "regular-text slider-output"> </text>
+                    </div>
+                    <div class="input-container type-electrification">
+                        <text class = "regular-text"> Electrification: </text><br/>
+                        <text class = "regular-text"> 0% </text>
+                        <input class = "slider" type="range" min = "0" max = "100" value = "0" step = "1" disabled></input>
+                        <text class = "regular-text"> 100% &nbsp;&nbsp;&nbsp; </text>
+                        <text class = "regular-text slider-output"> </text>
+                    </div>
                 </div>
-                <div class="input-container type-demand">
-                    <!-- TODO add text input box for precision? will need to filter out non numeric input + trigger slider event -->
-                    <!-- TODO blurbs saying demand % inc's efffactor (by amt of things using it) whereas electrification % doesn't (by GWh)-->
-                    <p> 0% </p>
-                    <input  class = "slider" type="range" min = "0" max = "500" value = "100" step = "1" disabled></input>
-                    <p> 500% &nbsp;&nbsp;&nbsp; </p>
-                    <p class = "slider-output"> </p>
+                <div class="cell sector-commercial">
+                    <text class = "subtitles"> Commercial </text>
+                    <div class = "vis-container">
+                        <svg class = "vis"></svg>
+                    </div>
+                    <br/>
+                    <div class="input-container type-elec-efficiency">
+                        <text class = "regular-text"> Electric Efficiency: </text><br/>
+                        <text class = "regular-text"> 0 </text>
+                        <input class = "slider" type="range" min="0" max = "1" step="any" disabled></input>
+                        <text class = "regular-text"> 1 </text>
+                        <text class = "regular-text slider-output"> </text>
+                    </div>
+                    <div class="input-container type-demand">
+                        <text class = "regular-text"> Demand: </text><br/>
+                        <text class = "regular-text"> 0% </text>
+                        <input class = "slider" type="range" min = "0" max = "500" value = "100" step = "1" disabled></input>
+                        <text class = "regular-text"> 500% &nbsp;&nbsp;&nbsp; </text>
+                        <text class = "regular-text slider-output"> </text>
+                    </div>
+                    <div class="input-container type-electrification">
+                        <text class = "regular-text"> Electrification: </text><br/>
+                        <text class = "regular-text"> 0% </text>
+                        <input class = "slider" type="range" min = "0" max = "100" value = "0" step = "1" disabled></input>
+                        <text class = "regular-text"> 100% &nbsp;&nbsp;&nbsp; </text>
+                        <text class = "regular-text slider-output"> </text>
+                    </div>
                 </div>
-                <div class="input-container type-electrification">
-                    <p> 0% </p>
-                    <input class = "slider"  type="range" min = "0" max = "100" value = "0" step = "1" disabled></input>
-                    <p> 100% &nbsp;&nbsp;&nbsp; </p>
-                    <p class = "slider-output"> </p>
-                </div>
-            </div>
-            <div class="cell sector-transportation">
-                <p class = "subheader"> Transportation </p>
-                <div class = "vis-container">
-                    <svg class = "vis"></svg>
-                </div>
-                <div class="input-container type-elec-efficiency">
-                    <p> 0 </p>
-                    <input class = "slider" type="range" min="0" max = "1" step="any" disabled></input>
-                    <p> 1 </p>
-                    <p class = "slider-output"> </p>
-                </div>
-                <div class="input-container type-demand">
-                    <p> 0% </p>
-                    <input class = "slider"  type="range" min = "0" max = "500" value = "100" step = "1" disabled></input>
-                    <p> 500% &nbsp;&nbsp;&nbsp; </p>
-                    <p class = "slider-output"> </p>
-                </div>
-                <div class="input-container type-electrification">
-                    <p> 0% </p>
-                    <input class = "slider" type="range" min = "0" max = "100" value = "0" step = "1" disabled></input>
-                    <p> 100% &nbsp;&nbsp;&nbsp; </p>
-                    <p class = "slider-output"> </p>
-                </div>
-            </div>
-            <div class="cell sector-commercial">
-                <p class = "subheader"> Commercial </p>
-                <div class = "vis-container">
-                    <svg class = "vis"></svg>
-                </div>
-                <div class="input-container type-elec-efficiency">
-                    <p> 0 </p>
-                    <input class = "slider" type="range" min="0" max = "1" step="any" disabled></input>
-                    <p> 1 </p>
-                    <p class = "slider-output"> </p>
-                </div>
-                <div class="input-container type-demand">
-                    <p> 0% </p>
-                    <input class = "slider" type="range" min = "0" max = "500" value = "100" step = "1" disabled></input>
-                    <p> 500% &nbsp;&nbsp;&nbsp; </p>
-                    <p class = "slider-output"> </p>
-                </div>
-                <div class="input-container type-electrification">
-                    <p> 0% </p>
-                    <input class = "slider" type="range" min = "0" max = "100" value = "0" step = "1" disabled></input>
-                    <p> 100% &nbsp;&nbsp;&nbsp; </p>
-                    <p class = "slider-output"> </p>
-                </div>
-            </div>
-            <div class="cell sector-residential">
-                <p class = "subheader"> Residential </p>
-                <div class = "vis-container">
-                    <svg class = "vis"></svg>
-                </div>
-                <div class="input-container type-elec-efficiency">
-                    <p> 0 </p>
-                    <input class = "slider" type="range" min="0" max = "1" step="any" disabled></input>
-                    <p> 1 </p>
-                    <p class = "slider-output"> </p>
-                </div>
-                <div class="input-container type-demand">
-                    <p> 0% </p>
-                    <input class = "slider" type="range" min = "0" max = "500" value = "100" step = "1" disabled></input>
-                    <p> 500% &nbsp;&nbsp;&nbsp; </p>
-                    <p class = "slider-output"> </p>
-                </div>
-                <div class="input-container type-electrification">
-                    <p> 0% </p>
-                    <input class = "slider" type="range" min = "0" max = "100" value = "0" step = "1" disabled></input>
-                    <p> 100% &nbsp;&nbsp;&nbsp; </p>
-                    <p class = "slider-output"> </p>
+                <div class="cell sector-residential">
+                    <text class = "subtitles"> Residential </text>
+                    <div class = "vis-container">
+                        <svg class = "vis"></svg>
+                    </div>
+                    <br/>
+                    <div class="input-container type-elec-efficiency">
+                        <text class = "regular-text"> Electric Efficiency: </text><br/>
+                        <text class = "regular-text"> 0 </text>
+                        <input class = "slider" type="range" min="0" max = "1" step="any" disabled></input>
+                        <text class = "regular-text"> 1 </text>
+                        <text class = "regular-text slider-output"> </text>
+                    </div>
+                    <div class="input-container type-demand">
+                        <text class = "regular-text"> Demand: </text><br/>
+                        <text class = "regular-text"> 0% </text>
+                        <input class = "slider" type="range" min = "0" max = "500" value = "100" step = "1" disabled></input>
+                        <text class = "regular-text"> 500% &nbsp;&nbsp;&nbsp; </text>
+                        <text class = "regular-text slider-output"> </text>
+                    </div>
+                    <div class="input-container type-electrification">
+                        <text class = "regular-text"> Electrification: </text><br/>
+                        <text class = "regular-text"> 0% </text>
+                        <input class = "slider" type="range" min = "0" max = "100" value = "0" step = "1" disabled></input>
+                        <text class = "regular-text"> 100% &nbsp;&nbsp;&nbsp; </text>
+                        <text class = "regular-text slider-output"> </text>
+                    </div>
                 </div>
             </div>
         </div>
+    </div>
+    <div class = "container">
         <div class="electricity">
-            <p class = "generation-output"></p>
+            <p class = "generation-output titles"> Electricity </p>
+            <p class = "demand-output subtitles"></p>
             <div class = "column">
-                <p class = "demand-output"></p>
                 <div class="input-container type-transmission-efficiency">
-                    <p class = "subheader"> Transmission Efficiency: </p>
-                    <p> 0 </p>
+                    <p class = "regular-text"> Transmission Efficiency: </p>
+                    <p class = "regular-text"> 0 </p>
                     <input class = "slider" type="range" min = "0" max = "1" value = "0" step = "any"></input>
-                    <p> 1 &nbsp;&nbsp;&nbsp; </p>
-                    <p class = "slider-output"> </p>
+                    <p class = "regular-text"> 1 &nbsp;&nbsp;&nbsp; </p>
+                    <p class = "regular-text slider-output"> </p>
                 </div>
                 <br/>
                 <div class="input-container type-piece-wind">
-                    <p class = "subheader"> Wind: </p>
-                    <p> 0 </p>
+                    <p class = "regular-text"> Wind: </p>
+                    <p class = "regular-text"> 0 </p>
                     <input class = "slider" type="range" min = "0" max = "1000" value = "0" step = "1"></input>
-                    <p> 1000% &nbsp;&nbsp;&nbsp; </p>
-                    <p class = "slider-output"> </p>
+                    <p class = "regular-text"> 1000% &nbsp;&nbsp;&nbsp; </p>
+                    <p class = "regular-text slider-output"> </p>
 
                     <!-- TODO align these right -->
                 </div>
                 <div class="input-container type-piece-solar">
-                    <p class = "subheader"> Solar: </p>
-                    <p> 0 </p>
+                    <p class = "regular-text"> Solar: </p>
+                    <p class = "regular-text"> 0 </p>
                     <input class = "slider" type="range" min = "0" max = "1000" value = "0" step = "1"></input>
-                    <p> 1000% &nbsp;&nbsp;&nbsp; </p>
-                    <p class = "slider-output"> </p>
+                    <p class = "regular-text"> 1000% &nbsp;&nbsp;&nbsp; </p>
+                    <p class = "regular-text slider-output"> </p>
                 </div>
                 <div class="input-container type-piece-geothermal">
-                    <p class = "subheader"> Geothermal: </p>
-                    <p> 0 </p>
+                    <p class = "regular-text"> Geothermal: </p>
+                    <p class = "regular-text"> 0 </p>
                     <input class = "slider" type="range" min = "0" max = "1000" value = "0" step = "1"></input>
-                    <p> 1000% &nbsp;&nbsp;&nbsp; </p>
-                    <p class = "slider-output"> </p>
+                    <p class = "regular-text"> 1000% &nbsp;&nbsp;&nbsp; </p>
+                    <p class = "regular-text slider-output"> </p>
                 </div>
                 <div class="input-container type-piece-hydroelectric">
-                    <p class = "subheader"> Hydroelectric: </p>
-                    <p> 0 </p>
+                    <p class = "regular-text"> Hydroelectric: </p>
+                    <p class = "regular-text"> 0 </p>
                     <input class = "slider" type="range" min = "0" max = "1000" value = "0" step = "1"></input>
-                    <p> 1000% &nbsp;&nbsp;&nbsp; </p>
-                    <p class = "slider-output"> </p>
+                    <p class = "regular-text"> 1000% &nbsp;&nbsp;&nbsp; </p>
+                    <p class = "regular-text slider-output"> </p>
                 </div>
                 <div class="input-container type-piece-nuclear">
-                    <p class = "subheader"> Nuclear: </p>
-                    <p> 0 </p>
+                    <p class = "regular-text"> Nuclear: </p>
+                    <p class = "regular-text"> 0 </p>
                     <input class = "slider" type="range" min = "0" max = "1000" value = "0" step = "1"></input>
-                    <p> 1000% &nbsp;&nbsp;&nbsp; </p>
-                    <p class = "slider-output"> </p>
+                    <p class = "regular-text"> 1000% &nbsp;&nbsp;&nbsp; </p>
+                    <p class = "regular-text slider-output"> </p>
                 </div>
                 <div class="input-container type-piece-coal">
-                    <p class = "subheader"> Coal: </p>
-                    <p> 0 </p>
+                    <p class = "regular-text"> Coal: </p>
+                    <p class = "regular-text"> 0 </p>
                     <input class = "slider" type="range" min = "0" max = "300" value = "0" step = "1"></input>
-                    <p> 300% &nbsp;&nbsp;&nbsp; </p>
-                    <p class = "slider-output"> </p>
+                    <p class = "regular-text"> 300% &nbsp;&nbsp;&nbsp; </p>
+                    <p class = "regular-text slider-output"> </p>
                 </div>
                 <div class="input-container type-piece-natural-gas">
-                    <p class = "subheader"> Natural Gas: </p>
-                    <p> 0 </p>
+                    <p class = "regular-text"> Natural Gas: </p>
+                    <p class = "regular-text"> 0 </p>
                     <input class = "slider" type="range" min = "0" max = "300" value = "0" step = "1"></input>
-                    <p> 300% &nbsp;&nbsp;&nbsp; </p>
-                    <p class = "slider-output"> </p>
+                    <p class = "regular-text"> 300% &nbsp;&nbsp;&nbsp; </p>
+                    <p class = "regular-text slider-output"> </p>
                 </div>
                 <div class="input-container type-piece-petroleum">
-                    <p class = "subheader"> Petroleum: </p>
-                    <p> 0 </p>
+                    <p class = "regular-text"> Petroleum: </p>
+                    <p class = "regular-text"> 0 </p>
                     <input class = "slider" type="range" min = "0" max = "300" value = "0" step = "1"></input>
-                    <p> 300% &nbsp;&nbsp;&nbsp; </p>
-                    <p class = "slider-output"> </p>
+                    <p class = "regular-text"> 300% &nbsp;&nbsp;&nbsp; </p>
+                    <p class = "regular-text slider-output"> </p>
                 </div>
                 <br/>
                 <div class="output-container type-piece-other">
-                    <p class = "subheader"> Other: </p>
-                    <p class = "output"> </p>
+                    <p class = "mini-text"> Other: </p>
+                    <p class = "mini-text output"> </p>
                 </div>
                 <div class="output-container type-piece-import">
-                    <p class = "subheader"> Import: </p>
-                    <p class = "output"> </p>
+                    <p class = "mini-text"> Import: </p>
+                    <p class = "mini-text output"> </p>
                 </div>
             </div>
             <div class = "vis-container">
-                <p class = "subheader"> </p>
                 <svg class = "vis"></svg>
             </div>
         </div>
     </div>
     <div class="container">
         <div class = "co2">
+            <p class = "titles"> CO2 </p>
             <div class = "vis-container">
-                <p class = "subheader"> </p>
                 <svg class = "vis"></svg>
             </div>
         </div>
     </div>
+    <br/>
     <div class = "container">
         <div class = "legend">
+            <p class = "titles"> Green: </p>
             <div class = "vis-container green"></div>
+            <p class = "titles"> Not Green: </p>
             <div class = "vis-container ngreen"></div>
         </div>
     </div>
     <div class = "tooltip">
-        <text class = "subheader"></text> <br/>
-        <text class = "subtitles line-1"></text> <br/>
-        <text class = "subtitles line-2"></text> <br/>
+        <text class = "subtitles"></text> <br/>
+        <br/>
+        <text class = "regular-text line-1"></text> <br/>
+        <text class = "regular-text line-2"></text> <br/>
     </div>
 
     <script src="4.22.25_interactive_vis.js"></script>
