@@ -84,7 +84,13 @@ fieldset {
 }
 
 .electricity .input-container {
+    position: relative;
     width: 500px;
+}
+
+.electricity .input-container .slider-output {
+    position: absolute;
+    right: 0;
 }
 
 .electricity .vis-container {

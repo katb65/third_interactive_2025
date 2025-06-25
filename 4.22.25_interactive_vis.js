@@ -4,7 +4,7 @@
 // ---Assumptions: ---
 // TODO
 // CO2 won't get more subsets
-// Electricity returns won't have duplicate values for some year & ID (else we'll have to do slightly more complex storage - map of id to val -
+// Electricity returns won't have duplicate values or things to subtract for some year & ID (else we'll have to do slightly more complex storage - map of id to val -
 // than just adding as we go)
 // Only nuclear & hydro are controversial as green
 
@@ -137,13 +137,12 @@ class EnergySubset {
 class ElectricityPiece {
   key; // ex. "wind"
   ids; // array of IDs to sum up vals of for this piece
-  // TODO should I change this to mirror the above idToVal but just without the add/subtract ? for readability + future flexibility
 
   baseVal; // totaled val state of this piece, GWh
 
   adjustedVal; // GWh
   
-  adjustedDemand; // %
+  adjustedDemand; // % of generation & import total base val
 
   constructor(key, ids) {
     this.key = key;
@@ -259,6 +258,9 @@ let elecOther = new ElectricityPiece("other", ["OOG", "OTH", "BIO"]);
 // Separate, because it is pulled from a different section of the EIA site, can be negative, and is not contained in the CO2 section
 let elecImport = new ElectricityPiece("import", ["ELNIP", "ELISP"]);
 
+// sum of electricity map base vals + other + import: total base electricity for selected state (used for easy slider manipulation)
+let elecBaseGeneration = null;
+
 // Transmission efficiency (how much of electricity generated is able to be used after losses)
 let transmissionEfficiency = null;
 
@@ -278,6 +280,9 @@ co2.map.set("electric", new CO2Subset("electric", "EC"));
 
 // Set of primary pieces considered green
 let greenSet = new Set(["wind", "solar", "geothermal", "hydroelectric", "nuclear"]);
+
+// When a number is below this value, it's considered 0
+let roundToZero = 0.000001;
 
 // -----------------------------------------------------
 // ---Display Variables: ---
@@ -360,7 +365,10 @@ d3.selectAll(".cell > .input-container.type-demand,.input-container.type-electri
 d3.selectAll(".cell > .type-elec-efficiency > .slider")
   .on("change", (event) => updateElecEfficiency(event));
 
-d3.selectAll(".electricity :not(.type-transmission-efficiency) > .slider")
+d3.select(".electricity > .input-container.type-equalize-demand > .button")
+  .on("click", updateEqualizeDemand);
+
+d3.selectAll(".electricity .input-container:not(.type-transmission-efficiency):not(.type-equalize-demand) > .slider")
   .on("change", (event) => updateElectricity(event));
 
 d3.select(".electricity .input-container.type-transmission-efficiency > .slider")
@@ -567,7 +575,86 @@ function updateElecEfficiency(event) {
     visualizeLegend();
 }
 
-// Called on user changing some piece of electricity generation or import quantity
+// Called on user clicking the equalize demand button, brings electricity generation up or down proportionally to its current state
+// to match generation to demand (in case of some slider reaching its max or min, re-proportions)
+function updateEqualizeDemand() {
+  // Calculate difference between available and needed electricity (taking into account the transmission efficiency) and also the current generation
+  // of all adjustable pieces
+  let currElecDifference = 0;
+  let currElecResponsibleTotal = 0;
+  for(let currSubset of consumption.values()) {
+    currElecDifference += currSubset.subSubsets.get("electric")["adjustedVal"] / transmissionEfficiency;
+  }
+  for(let currElectricityPiece of electricity.values()) {
+    currElecDifference -= currElectricityPiece["adjustedVal"];
+    currElecResponsibleTotal += currElectricityPiece["adjustedVal"];
+  }
+
+  if(currElecDifference < 0) { // more electricity than is consumed
+    // Decrease all sliders
+    // Some may hit 0 and need another loop, or several if cascade effect, to redistribute the pieces they're responsible for
+    while (!(-currElecDifference <= roundToZero) && currElecResponsibleTotal !== 0) {
+      let successfullyDistributed = 0;
+      for(let currElectricityPiece of electricity.values()) {
+        let currResponsibility = currElecDifference * (currElectricityPiece["adjustedVal"]/currElecResponsibleTotal); // current proportion of responsibility
+
+        if(currElectricityPiece["adjustedVal"] + currResponsibility <= roundToZero) {
+          successfullyDistributed -= currElectricityPiece["adjustedVal"];
+          currElectricityPiece["adjustedVal"] = 0;
+          currElectricityPiece["adjustedDemand"] = 0;
+        } else {
+          successfullyDistributed += currResponsibility;
+          currElectricityPiece["adjustedVal"] += currResponsibility;
+          currElectricityPiece["adjustedDemand"] = 100 * (currElectricityPiece["adjustedVal"] / elecBaseGeneration);
+        }
+      }
+
+      currElecResponsibleTotal = 0;
+      // recalculate total only of those that are still "in the running" for proportionality, not tapped out
+      for(let currElectricityPiece of electricity.values()) {
+        if(currElectricityPiece["adjustedVal"] !== 0) { // real 0 since rounded above
+          currElecResponsibleTotal += currElectricityPiece["adjustedVal"];
+        }
+      }
+      currElecDifference -= successfullyDistributed;
+    }
+  } else if(currElecDifference > 0) {
+    // Increase all sliders
+    while (!(currElecDifference <= roundToZero) && currElecResponsibleTotal !== 0) {
+      let successfullyDistributed = 0;
+      let maxSliderPercent = d3.select(".electricity .input-container:not(.type-transmission-efficiency) .slider").attr("max");
+
+      for(let currElectricityPiece of electricity.values()) {
+        let currResponsibility = currElecDifference * (currElectricityPiece["adjustedVal"]/currElecResponsibleTotal); 
+
+        if(100 * ((currElectricityPiece["adjustedVal"] + currResponsibility) / elecBaseGeneration) >= maxSliderPercent) {
+          successfullyDistributed += elecBaseGeneration * (maxSliderPercent / 100) - currElectricityPiece["adjustedVal"];
+          currElectricityPiece["adjustedVal"] = elecBaseGeneration * (maxSliderPercent / 100);
+          currElectricityPiece["adjustedDemand"] = maxSliderPercent;
+        } else {
+          successfullyDistributed += currResponsibility;
+          currElectricityPiece["adjustedVal"] = currElectricityPiece["adjustedVal"] += currResponsibility;
+          currElectricityPiece["adjustedDemand"] = 100 * (currElectricityPiece["adjustedVal"] / elecBaseGeneration);
+        }
+      }
+
+      currElecResponsibleTotal = 0;
+      // recalculate total only of those that are still "in the running" for proportionality, not tapped out
+      for(let currElectricityPiece of electricity.values()) {
+        if(currElectricityPiece["adjustedDemand"] !== maxSliderPercent) { // real 0 since rounded above
+          currElecResponsibleTotal += currElectricityPiece["adjustedVal"];
+        }
+      }
+      currElecDifference -= successfullyDistributed;
+    }
+  }
+
+  visualizeElectricityData();
+  visualizeCO2Data();
+  visualizeLegend();
+}
+
+// Called on user changing some piece of electricity generation percent of total base val
 function updateElectricity(event) {
     // Get updated value
     let currValue = parseFloat(d3.select(event.target).property("value"));
@@ -583,7 +670,7 @@ function updateElectricity(event) {
 
     let currElectricityPiece = electricity.get(currJSKey);
     currElectricityPiece["adjustedDemand"] = currValue;
-    currElectricityPiece["adjustedVal"] = currElectricityPiece["baseVal"] * currValue / 100;
+    currElectricityPiece["adjustedVal"] = elecBaseGeneration * currValue / 100;
 
     // Propagate effects
     calculateStoreAdjustedCO2("electric");
@@ -1004,17 +1091,19 @@ function visualizeElectricityData() {
     let currHTMLKey = currElectricityPiece.key.replace(/\s+/, '-');
     let currPieceBox = electricityBox.select(".input-container.type-piece-" + currHTMLKey);
     currPieceBox.select(".slider").property("value", currElectricityPiece["adjustedDemand"]);
-    currPieceBox.select(".slider-output").text(currElectricityPiece["adjustedDemand"] + "% --- " + 
+    currPieceBox.select(".slider-output").text(formatCommas(currElectricityPiece["adjustedDemand"]) + "%,  " + 
       formatCommas(currElectricityPiece["adjustedVal"]/GWhorGWDivisor) + " " + GWhorGW);
   }
 
   // Other
   let otherBox = electricityBox.select(".output-container.type-piece-other");
-  otherBox.select(".output").text(formatCommas(elecOther["baseVal"]/GWhorGWDivisor) + " " + GWhorGW);
+  otherBox.select(".output").text(formatCommas(elecOther["adjustedDemand"]) + "%,  " + 
+    formatCommas(elecOther["baseVal"]/GWhorGWDivisor) + " " + GWhorGW);
 
   // Imports
   let importBox = electricityBox.select(".output-container.type-piece-import");
-  importBox.select(".output").text(formatCommas(elecImport["baseVal"]/GWhorGWDivisor) + " " + GWhorGW);
+  importBox.select(".output").text(formatCommas(elecImport["adjustedDemand"]) + "%,  " +
+    formatCommas(elecImport["baseVal"]/GWhorGWDivisor) + " " + GWhorGW);
 
   // Transmission efficiency
   let transEffBox = electricityBox.select(".input-container.type-transmission-efficiency");
@@ -1023,26 +1112,26 @@ function visualizeElectricityData() {
 
   // Calculate & display difference between available and needed electricity (taking into account the transmission efficiency)
   // Also display total generation
-  let currDemand = 0;
-  let currGeneration = 0;
+  let currElecDifference = 0;
+  let currElecGeneration = 0;
   for(let currSubset of consumption.values()) {
-    currDemand += currSubset.subSubsets.get("electric")["adjustedVal"];
+    currElecDifference += currSubset.subSubsets.get("electric")["adjustedVal"];
   }
   for(let currElectricityPiece of electricity.values()) {
-    currDemand -= currElectricityPiece["adjustedVal"] * transmissionEfficiency;
-    currGeneration += currElectricityPiece["adjustedVal"];
+    currElecDifference -= currElectricityPiece["adjustedVal"] * transmissionEfficiency;
+    currElecGeneration += currElectricityPiece["adjustedVal"];
   }
-  currDemand -= elecOther["baseVal"] * transmissionEfficiency;
-  currGeneration += elecOther["baseVal"];
-  currDemand -= elecImport["baseVal"] * transmissionEfficiency;
-  currGeneration += elecImport["baseVal"];
+  currElecDifference -= elecOther["baseVal"] * transmissionEfficiency;
+  currElecGeneration += elecOther["baseVal"];
+  currElecDifference -= elecImport["baseVal"] * transmissionEfficiency;
+  currElecGeneration += elecImport["baseVal"];
 
-  if(currDemand >= 0) {
-    electricityBox.select(".demand-output").text("Demand remaining to fill: " + formatCommas(currDemand/GWhorGWDivisor) + " " + GWhorGW);
+  if(currElecDifference >= 0) {
+    electricityBox.select(".demand-output").text("Demand remaining to fill: " + formatCommas(currElecDifference/GWhorGWDivisor) + " " + GWhorGW);
   } else {
-    electricityBox.select(".demand-output").text("Over demand by: " + formatCommas(-currDemand/GWhorGWDivisor) + " " + GWhorGW);
+    electricityBox.select(".demand-output").text("Over demand by: " + formatCommas(-currElecDifference/GWhorGWDivisor) + " " + GWhorGW);
   }
-  electricityBox.select(".generation-output").text("Electricity Generation & Import: " + formatCommas(currGeneration/GWhorGWDivisor) + " " + GWhorGW);
+  electricityBox.select(".generation-output").text("Electricity Generation & Import: " + formatCommas(currElecGeneration/GWhorGWDivisor) + " " + GWhorGW);
 
   // Visualize (without other or import)
   // Set up JSON object of values to visualize
@@ -1370,7 +1459,7 @@ function calculateStoreAdjustedVals(currSector) {
           - (toMove * (currPrimaryPiece["baseVal"]/(currSubset.subSubsets.get("primary")["baseVal"] - unelectrifiableSumBase)));
       }
 
-      if(currPrimaryPiece["adjustedVal"] < 0.000001) { // round
+      if(currPrimaryPiece["adjustedVal"] < roundToZero) { // round
         currPrimaryPiece["adjustedVal"] = 0;
       }
     }
@@ -1401,7 +1490,7 @@ function calculateStoreAdjustedCO2(currSector) {
       currCO2Piece["adjustedVal"] = currCO2Piece["factor"] * consumption.get(currSector).subSubsets.get("primary")
         .primaryPieces.get(currCO2Piece["key"])["adjustedVal"];
     }    
-    if(currCO2Piece["adjustedVal"] < 0.000001) { // round
+    if(currCO2Piece["adjustedVal"] < roundToZero) { // round
       currCO2Piece["adjustedVal"] = 0;
     }
   }
@@ -1634,7 +1723,7 @@ function storeEnergyData(allFullsEnergy) {
 
 // For pullStoreData()
 // Dissects & stores EIA API response data for in the electricity generation values map for the current-set year & state
-// as well as storing the electricity import value and calculating initial transmission efficiency value
+// as well as storing the electricity other & import values and calculating base val total and initial transmission efficiency value
 // If no data for some value, assumes it 0
 // Some of these end up negative, but it's because in the pulled data itself, they are negative
 function storeElectricityData(allFullsElecGen, allFullsImport) {  
@@ -1644,12 +1733,13 @@ function storeElectricityData(allFullsElecGen, allFullsImport) {
   for(let currElectricityPiece of electricity.values()) {
     currElectricityPiece["baseVal"] = 0;
     currElectricityPiece["adjustedVal"] = 0;
-    currElectricityPiece["adjustedDemand"] = 100;
+    currElectricityPiece["adjustedDemand"] = 0;
   }
   elecOther["baseVal"] = 0;
   elecOther["adjustedVal"] = 0;
   elecImport["baseVal"] = 0;
   elecImport["adjustedVal"] = 0;
+  elecBaseGeneration = 0;
   transmissionEfficiency = 0;
   
   console.log(allFullsElecGen);
@@ -1708,28 +1798,30 @@ function storeElectricityData(allFullsElecGen, allFullsImport) {
     }
   }
 
-  // Transmission efficiency
-  let currElectricitySum = 0;
+  // Base val total & transmission efficiency
   for(let currElectricityPiece of electricity.values()) {
-    currElectricitySum += currElectricityPiece["baseVal"];
+    elecBaseGeneration += currElectricityPiece["baseVal"];
   }
-  currElectricitySum += elecImport["baseVal"];
-  currElectricitySum += elecOther["baseVal"];
+  elecBaseGeneration += elecImport["baseVal"];
+  elecBaseGeneration += elecOther["baseVal"];
 
-  let currElecUseSum = 0;
+  let elecBaseConsumption = 0;
   for(let currSubset of consumption.values()) {
-    currElecUseSum += currSubset.subSubsets.get("electric")["baseVal"];
+    elecBaseConsumption += currSubset.subSubsets.get("electric")["baseVal"];
   }
   
-  transmissionEfficiency = currElecUseSum / currElectricitySum; // TODO in hawaii this is 1.04... catch the issue... set to 1? maybe off grid
+  transmissionEfficiency = elecBaseConsumption / elecBaseGeneration; // TODO in hawaii this is 1.04... catch the issue... set to 1? maybe off grid
   // generation but is recorded as consumption. maybe some pricing approximation. okay since it'll be in advanced just leave it as 1.04 but give a disclaimer
 
-  // Set adjusted vals to start at base
+  // Set adjusted vals to start at base & percents of total base demand to be accurate
   for(let currElectricityPiece of electricity.values()) {
     currElectricityPiece["adjustedVal"] = currElectricityPiece["baseVal"];
+    currElectricityPiece["adjustedDemand"] = 100 * currElectricityPiece["baseVal"]/elecBaseGeneration;
   }
   elecOther["adjustedVal"] = elecOther["baseVal"];
+  elecOther["adjustedDemand"] = 100 * elecOther["baseVal"]/elecBaseGeneration;
   elecImport["adjustedVal"] = elecImport["baseVal"];
+  elecImport["adjustedDemand"] = 100 * elecImport["baseVal"]/elecBaseGeneration;
 
   console.log("elec gen pieces");
   for(let currElectricityPiece of electricity.values()) {
