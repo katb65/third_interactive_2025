@@ -589,6 +589,8 @@ function updateEqualizeDemand() {
     currElecDifference -= currElectricityPiece["adjustedVal"];
     currElecResponsibleTotal += currElectricityPiece["adjustedVal"];
   }
+  currElecDifference -= elecOther["baseVal"];
+  currElecDifference -= elecImport["baseVal"];
 
   if(currElecDifference < 0) { // more electricity than is consumed
     // Decrease all sliders
