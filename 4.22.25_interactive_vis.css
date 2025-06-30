@@ -14,8 +14,12 @@
 }
 
 .mini-text {
-    font-family: Georgia, serif;
+    font-family: 'Times New Roman', serif;
     font-size: 10px;
+}
+
+.green-text {
+    color: rgb(70, 100, 80);
 }
 
 .header {

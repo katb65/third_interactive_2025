@@ -67,6 +67,50 @@
                 </div>
             </fieldset>
         </details>
+        <br/>
+        <details>
+            <summary class = "regular-text" > Clarifications & Credits: </summary>
+            <fieldset>
+                <ul>
+                    <li class = "regular-text"> 
+                        <strong>Electric efficiency </strong> defines how much less electricity is needed to accomplish the same task as primary energy: 
+                        the lower the factor (out of 1), the more efficient electricity is than primary energy. This is preset based on approximate values. 
+                        <strong>Transmission efficiency</strong> is how much of the generated and imported energy makes it to be consumed by the sectors. 
+                        This is calculated directly from the pulled data, and thus sometimes ends up over 1 (ex. some years of Hawaii), likely due to minor 
+                        incongruencies in recording & rounding methods across datasets. Both can be changed after enabling their visibility in advanced settings.
+                    </li>
+                    <li class = "regular-text"> 
+                        <strong>Electrification %</strong> is based on % of total raw energy in GWh, while <strong>demand %</strong> is based on "amount of users", 
+                        each for some sector; this means the electric efficiency factor will impact them differently. For example, for a very low electric efficiency 
+                        factor, the electrification % and total energy use may be <strong>low</strong> at the same time as the demand % is <strong>high</strong>, 
+                        since this means a lot of users in that sector can get their needed energy supplied by an efficiently low amount (and thus also low proportion 
+                        to total, including primary, energy) of electricity.
+                    </li>
+                    <li class = "regular-text"> 
+                        Electrification sliders max out to leave all <strong>green primaries unelectrified</strong>; as well as transportation's aviation & marine 
+                        sections, if chosen in advanced settings. If the slider is slid past this max, it resets back down to it.
+                    </li>
+                    <li class = "regular-text">
+                        Available <strong> CO2 data is limited</strong>, splitting only into coal, natural gas, and petroleum. If aviation & marine details are 
+                        selected in advanced settings, these are carved out as part of petroleum, and function at the same emission factor, though this is likely
+                        inexact.
+                    </li>
+                    <li class = "regular-text"> 
+                        Available <strong>years</strong> are calculated directly from the intersection of available datasets.
+                    </li>
+                    <li class = "regular-text"> 
+                        Refer to <a href = https://www.nrel.gov/gis/solar-supply-curves.html class = "regular-text green-text"> NREL data </a> for real solar & 
+                        wind capacities per state.
+                    </li>
+                    <!-- TODO mention wind & solar capacity -->
+                </ul>
+                <br/>
+                <a href = https://d3js.org class = "mini-text green-text"> D3 </a><br/>
+                <a href = https://www.eia.gov/opendata/browser/seds class = "mini-text green-text"> EIA Energy Data </a><br/>
+                <a href = https://www.eia.gov/electricity/data/browser/ class = "mini-text green-text"> EIA Electricity Generation Data </a><br/>
+                <a href = https://www.eia.gov/opendata/browser/co2-emissions class = "mini-text green-text"> EIA CO2 Data </a><br/>
+            </fieldset>
+        </details>
     </div>
     <div class="container">
         <div class="energy">
@@ -194,7 +238,7 @@
             <p class = "generation-output titles"> Electricity </p>
             <div class = "input-container type-equalize-demand">
                 <p class = "demand-output subtitles"></p>
-                <button type = "button" class = "button subtitles"> Equalize Demand </button>
+                <button type = "button" class = "button subtitles" disabled> Equalize Demand </button>
             </div>
             <div class = "column">
                 <div class="input-container type-transmission-efficiency">
@@ -205,7 +249,7 @@
                     <p class = "regular-text slider-output"> </p>
                 </div>
                 <br/><br/>
-                <text class="mini-text"> (as % of initial total generation & import) </text>
+                <text class="mini-text green-text"> (as % of initial total generation & import) </text>
                 <div class="input-container type-piece-wind">
                     <p class = "regular-text"> Wind: </p>
                     <p class = "regular-text"> 0 </p>
@@ -264,12 +308,12 @@
                 </div>
                 <br/>
                 <div class="output-container type-piece-other">
-                    <p class = "mini-text"> Other: </p>
-                    <p class = "mini-text output"> </p>
+                    <p class = "mini-text green-text"> Other: </p>
+                    <p class = "mini-text green-text output"> </p>
                 </div>
                 <div class="output-container type-piece-import">
-                    <p class = "mini-text"> Import: </p>
-                    <p class = "mini-text output"> </p>
+                    <p class = "mini-text green-text"> Import: </p>
+                    <p class = "mini-text green-text output"> </p>
                 </div>
             </div>
             <div class = "vis-container">

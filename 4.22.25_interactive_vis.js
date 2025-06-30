@@ -1,12 +1,17 @@
 // ---Goal: ---
-// TODO
+// Visualization of energy use, electricity generation, and CO2 emission data, pulled directly from the EIA for the latest years, split by state or available
+// for whole US, and heavily interactive. Intended to show changes needed to make all used energy green, as well as showing impact of increased demand on
+// electricity load & on CO2 emissions.
 
 // ---Assumptions: ---
-// TODO
-// CO2 won't get more subsets
-// Electricity returns won't have duplicate values or things to subtract for some year & ID (else we'll have to do slightly more complex storage - map of id to val -
-// than just adding as we go)
-// Only nuclear & hydro are controversial as green
+// The subsets that currently exist in each values map are those that will continue to be available, and will continue to mean the same pools of data
+// (else add other subsets, their IDs, and storage/display handling)
+// Electricity returns won't have duplicate values or items to subtract for some year & ID (else we'll have to do slightly more complex storage - map of id to val -
+// like in energy; than just adding as we go)
+// Units will remain the same (the pulling code will throw an error if they are changed; pre-storage handling will need to be adjusted in this case)
+// Only nuclear & hydroelectric energies are controversial as being green or not green (else add more checkboxes & handling)
+// The values are pulled accurately (this is difficult to check, as for most, a check by an automatic method would involve merely pulling them again in the same
+// way, defeating the purpose; this can be checked manually through the linked EIA browsers)
 
 // ---These should be changed to someone else's EIA API key & directory root (for local files) once I'm not involved with the project: ---
 // (key obtainable on EIA site):
@@ -387,6 +392,8 @@ async function updateState() {
 
   await pullStoreData();
 
+  checkTotalParts();
+
   visualizeEnergyData();
   visualizeElectricityData();
   visualizeCO2Data();
@@ -403,6 +410,8 @@ async function updateYear() {
   disableUserInput();
 
   await pullStoreData();
+
+  checkTotalParts();
 
   visualizeEnergyData();
   visualizeElectricityData();
@@ -437,6 +446,8 @@ function updateGreenSet(event) {
   }
 
   preventGreenElectrification();
+
+  checkTotalParts();
 
   visualizeEnergyData();
   visualizeElectricityData();
@@ -489,6 +500,8 @@ function updateExcludeTransportationSet(event) {
   calculateStoreAdjustedVals("transportation");
   calculateStoreAdjustedCO2("transportation"); // in case of electrification change in prevent green electrification
 
+  checkTotalParts();
+
   visualizeEnergyData("transportation");
   visualizeCO2Data();
   visualizeLegend();
@@ -536,9 +549,10 @@ function updateSectorSlider(event) {
     }
 
     // Propagate event consequences from now stored adjustedDemand or adjustedElectrification through all subSubsets/pieces' adjustedVals
-    // TODO more once CO2, electric breakdown
     calculateStoreAdjustedVals(currSector);
     calculateStoreAdjustedCO2(currSector);
+
+    checkTotalParts();
 
     // Print/visualize event update based on the now stored data
     visualizeEnergyData(currSector);
@@ -567,6 +581,8 @@ function updateElecEfficiency(event) {
     // Update data to reflect it (propagate effects)
     calculateStoreAdjustedVals(currSector);
     calculateStoreAdjustedCO2(currSector);
+
+    checkTotalParts();
 
     // Visualize event update
     visualizeEnergyData(currSector);
@@ -651,6 +667,10 @@ function updateEqualizeDemand() {
     }
   }
 
+  calculateStoreAdjustedCO2("electric");
+
+  checkTotalParts();
+
   visualizeElectricityData();
   visualizeCO2Data();
   visualizeLegend();
@@ -676,6 +696,8 @@ function updateElectricity(event) {
 
     // Propagate effects
     calculateStoreAdjustedCO2("electric");
+
+    checkTotalParts();
 
     // Visualize event update
     visualizeElectricityData();
@@ -722,6 +744,8 @@ async function initialize() {
         }
       }
     }
+
+    checkTotalParts();
 
     visualizeEnergyData();
     visualizeElectricityData();
@@ -875,8 +899,6 @@ async function pullStoreData() {
     storeEnergyData(allFullsEnergy);
     storeElectricityData(allFullsElectricity, allFullsImport);
     storeCO2Data(allFullsCO2);
-
-    //checkTotalParts();
 }
 
 // Visualize & print relevant text for the energy data contained in one or all of the four sector boxes (bar graph charts)
@@ -1377,7 +1399,7 @@ function initializeStateNameToID() {
     .set("Washington", "WA").set("West Virginia", "WV").set("Wisconsin", "WI").set("Wyoming", "WY");
 }
 
-// For updateState(), updateYear(), TODO
+// For updateState(), updateYear()
 // Disables all user input elements
 function disableUserInput() {
     d3.select("#state-select-drop")
@@ -1394,11 +1416,11 @@ function disableUserInput() {
         .property("disabled", true);
     d3.selectAll(".cell .slider")
         .property("disabled", true);
-    d3.selectAll(".electricity .slider")
+    d3.selectAll(".electricity .slider, .button")
         .property("disabled", true);
 }
 
-// For initialize(), updateState(), updateYear(), TODO
+// For initialize(), updateState(), updateYear()
 // Enables all user input elements
 function enableUserInput() {
     d3.select("#state-select-drop")
@@ -1415,11 +1437,11 @@ function enableUserInput() {
         .attr("disabled", null);
     d3.selectAll(".cell .slider")
         .attr("disabled", null);
-    d3.selectAll(".electricity .slider")
+    d3.selectAll(".electricity .slider, .button")
         .attr("disabled", null);
 }
 
-// For updateSectorSlider(), updateElecEfficiency()
+// For updateSectorSlider(), updateElecEfficiency(), updateExcludeTransportationSet()
 // Calculates & store the current adjustedVals for the subSubsets & primary pieces of passed in sector based on the current
 // adjustedDemand and adjustedElectrification, and green/excluded pieces
 function calculateStoreAdjustedVals(currSector) {
@@ -1478,7 +1500,7 @@ function calculateStoreAdjustedVals(currSector) {
     }
 }
 
-// For updateSectorSlider(), updateElecEfficiency()
+// For updateSectorSlider(), updateElecEfficiency(), updateElectricity(), updateExcludeTransportationSet(), updateEqualizeDemand()
 // Calculates & store the current adjustedVals for the CO2 of passed in sector or electric, based on the current
 // energy & electricity maps
 function calculateStoreAdjustedCO2(currSector) {
@@ -1655,6 +1677,11 @@ function storeEnergyData(allFullsEnergy) {
             for(let currPrimaryPiece of currSubSubset.primaryPieces.values()) {
               for(let currID of currPrimaryPiece.idToVal.keys()) {
                 if(currID === currFullEnergy["seriesId"]) {
+                  if(currSubset.key === "transportation" && currPrimaryPiece.key === "petroleum") {
+                    console.log("1679 petroleum with ID " + currID);
+                  } else if(currSubset.key === "transportation" && exclude.has(currPrimaryPiece.key)) {
+                    console.log("1683 exclude has " + currPrimaryPiece.key);
+                  }
                   currPrimaryPiece.idToVal.get(currID)["baseVal"] = postConvert;
                 }
               }
@@ -1681,6 +1708,9 @@ function storeEnergyData(allFullsEnergy) {
       for(let currPrimaryPiece of currPrimary.primaryPieces.values()) {
         // baseVal was set to 0 at start of function
         for(let currVal of currPrimaryPiece.idToVal.values()) {
+          if(currSubset.key === "transportation" && (currPrimaryPiece.key === "petroleum" || exclude.has(currPrimaryPiece.key))) {
+            console.log(currPrimaryPiece.key + " " + currVal["add"] + " " + currVal["baseVal"]);
+          }
           if(currVal["add"]) { 
             currPrimaryPiece["baseVal"] += currVal["baseVal"];
           } else {
@@ -1693,7 +1723,11 @@ function storeEnergyData(allFullsEnergy) {
         }
 
         currPrimaryPiece["adjustedVal"] = currPrimaryPiece["baseVal"];
+        console.log(currPrimaryPiece["key"] + " " + currPrimaryPiece["baseVal"] + " " + currPrimaryPiece["adjustedVal"]);
       }
+
+      // after all the other-subtraction is over
+      currPrimary.primaryPieces.get("other")["adjustedVal"] = currPrimary.primaryPieces.get("other")["baseVal"];
 
       currSubset.subSubsets.get("total")["adjustedVal"] = currSubset.subSubsets.get("total")["baseVal"];
       currSubset.subSubsets.get("primary")["adjustedVal"] = currSubset.subSubsets.get("primary")["baseVal"];
@@ -1712,15 +1746,6 @@ function storeEnergyData(allFullsEnergy) {
       }
       // we don't set adjusted val for stored inactive pieces
     }
-
-    /*
-    console.log("1397-----");
-    for(let currSubset of consumption.values()) {
-      console.log(currSubset.key);
-      console.log("electric " + currSubset.subSubsets.get("electric")["adjustedVal"]);
-      console.log("primary " + currSubset.subSubsets.get("primary")["adjustedVal"]);
-    }
-      */
 }
 
 // For pullStoreData()
@@ -1883,7 +1908,7 @@ function storeCO2Data(allFullsCO2) {
         } else {
           let currEnergyVal = consumption.get(currSubset["key"]).subSubsets.get("primary").primaryPieces.get(currCO2Piece["key"])["baseVal"];
   
-          if(currSubset["key"] === "transportation" && currCO2Piece === "petroleum") {
+          if(currSubset["key"] === "transportation" && currCO2Piece["key"] === "petroleum") {
             for(let currKey of exclude.keys()) { 
               if(consumption.get("transportation").subSubsets.get("primary").primaryPieces.has(currKey)) {
                 currEnergyVal += consumption.get("transportation").subSubsets.get("primary").primaryPieces.get(currKey)["adjustedVal"]
@@ -1914,7 +1939,7 @@ function storeCO2Data(allFullsCO2) {
   }
 }
 
-// For updateSectorSlider(), updateElecEfficiency(), updateGreenSet()
+// For updateSectorSlider(), updateElecEfficiency(), updateGreenSet(), updateExcludeTransportationSet()
 // The min amount of primaries that can be left unelectrified is the green primaries: if the electrification % goes too high (or adjustedElecEfficiency changes 
 // the max electrification %), it will be checked & reduced to its max value by the below, for some key of some currSubset. 
 // Advanced settings can also let user exclude aviation & marine primaries from transportation sector electrification.
@@ -2071,8 +2096,73 @@ function printLegendPiece(green) {
       });
 }
 
-function checkTotalParts() { // TODO
-  
+// For initialize() & updateState(), updateYear(), updateGreenSet(), updateExcludeTransportationSet(), updateSectorSlider(), updateElecEfficiency(),
+// updateEqualizeDemand(), updateElectricity()
+// Check that basic things sum up, with slight margin of error (10GWh, 1%, 0.01 million metric tons)
+// (even though most are derived by subtracting from pulled pieces in the first place)
+function checkTotalParts() { 
+  for(let currSubset of consumption.values()) {
+    let currPrimaryBaseSum = 0;
+    let currPrimaryAdjustedSum = 0;
+    let currPrimary = currSubset.subSubsets.get("primary");
+    let currElectric = currSubset.subSubsets.get("electric");
+    let currTotal = currSubset.subSubsets.get("total");
+
+    for(let currPrimaryPiece of currPrimary.primaryPieces.values()) {
+      currPrimaryBaseSum += currPrimaryPiece["baseVal"];
+      currPrimaryAdjustedSum += currPrimaryPiece["adjustedVal"];
+
+      if(greenSet.has(currPrimaryPiece.key) || exclude.has(currPrimaryPiece)) {
+        if(currPrimaryPiece["adjustedVal"] - currPrimaryPiece["baseVal"] < -10) {
+          throw new Error("Unelectrifiable or green primary piece " + currPrimaryPiece.key + " mistakenly electrified");
+        }
+      }
+    }
+    if(Math.abs(currPrimaryBaseSum - currPrimary["baseVal"]) > 10 ||
+      Math.abs(currPrimaryAdjustedSum - currPrimary["adjustedVal"]) > 10) {
+      throw new Error("Primaries don't sum up in " + currSubset.key); 
+    }
+    if(Math.abs(currTotal["baseVal"] - currElectric["baseVal"] - currPrimary["baseVal"]) > 10 ||
+      Math.abs(currTotal["adjustedVal"] - currElectric["adjustedVal"] - currPrimary["adjustedVal"] > 10)) {
+      throw new Error("Electric and primary don't sum up to total in " + currSubset.key);
+    }
+    if(Math.abs(currSubset["adjustedElectrification"] - 100 * (currElectric["adjustedVal"] / currTotal["adjustedVal"]) > 1)) {
+      throw new Error("Electrification % is incorrect in " + currSubset.key);
+    }
+
+    // currprimary["adjustedVal"] - currprimary["baseVal"] = currprimary["baseVal"] * adjustedDemand - x
+    // currPrimary["baseVal"] * adjustedDemand - x = currElectric["baseVal"] * adjustedDemand + x*effFactor
+    // TODO adjusted demand???
+  }
+
+  let currElectricBaseSum = 0;
+  for(let currElectricityPiece of electricity.values()) {
+    currElectricBaseSum += currElectricityPiece["baseVal"];
+    if(Math.abs(elecBaseGeneration * currElectricityPiece["adjustedDemand"] / 100 - currElectricityPiece["adjustedVal"]) > 10) {
+      throw new Error("Incorrect calculation of adjusted electricity generation as percentage of total base in " + currElectricityPiece.key);
+    }
+  }
+  currElectricBaseSum += elecImport["baseVal"];
+  currElectricBaseSum += elecOther["baseVal"];
+  if(Math.abs(elecBaseGeneration - currElectricBaseSum) > 10) {
+    throw new Error("Electric pieces' base values fail to sum to stored base sum");
+  }
+
+  for(let currCO2Subset of co2.map.values()) {
+    for(let currCO2Piece of currCO2Subset.co2Pieces.values()) {
+      if(currCO2Subset.key === "electric") {
+        if(Math.abs(currCO2Piece["adjustedVal"] - electricity.get(currCO2Piece.key)["adjustedVal"] * currCO2Piece["factor"]) > 0.01) {
+          console.log(currCO2Piece["adjustedVal"] + " " + electricity.get(currCO2Piece.key)["adjustedVal"] + " " + currCO2Piece["factor"]);
+          throw new Error("CO2 factor multiplied by electricity adjusted val does not equal CO2 adjusted val for " + currCO2Piece.key);
+        }
+      } else {
+        if(Math.abs(currCO2Piece["adjustedVal"] - consumption.get(currCO2Subset.key).subSubsets.get("primary").primaryPieces.get(currCO2Piece.key)["adjustedVal"] 
+          * currCO2Piece["factor"]) > 0.01) {
+          throw new Error("CO2 factor multiplied by " + currCO2Subset.key + " adjusted val does not equal CO2 adjusted val for " + currCO2Piece.key);
+        }
+      }
+    }
+  }
 }
 
 // -----------------------------------------------------
