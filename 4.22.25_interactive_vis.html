@@ -14,6 +14,7 @@
 
 <body>
     <div class = "header">
+        <p id = "error-message" class = "titles"> Error present: see console to debug. </p>
         <div id = "state-select">
             <label class = "subtitles" for="state-select-drop">State:
             <select name="state-select-drop" id="state-select-drop" class = "regular-text" disabled></select></label>
@@ -77,7 +78,7 @@
                         the lower the factor (out of 1), the more efficient electricity is than primary energy. This is preset based on approximate values. 
                         <strong>Transmission efficiency</strong> is how much of the generated and imported energy makes it to be consumed by the sectors. 
                         This is calculated directly from the pulled data, and thus sometimes ends up over 1 (ex. some years of Hawaii), likely due to minor 
-                        incongruencies in recording & rounding methods across datasets. Both can be changed after enabling their visibility in advanced settings.
+                        incongruencies in recording & rounding methods across the available datasets. Both can be changed after enabling their visibility in advanced settings.
                     </li>
                     <li class = "regular-text"> 
                         <strong>Electrification %</strong> is based on % of total raw energy in GWh, while <strong>demand %</strong> is based on "amount of users", 

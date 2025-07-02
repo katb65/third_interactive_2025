@@ -170,3 +170,8 @@ fieldset {
 .type-elec-efficiency, .type-transmission-efficiency {
     display: none;
 }
+
+#error-message {
+    color: red;
+    display: none;
+}

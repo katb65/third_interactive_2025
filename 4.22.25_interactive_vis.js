@@ -4,6 +4,10 @@
 // electricity load & on CO2 emissions.
 
 // ---Assumptions: ---
+// Location of link to query will remain the same
+// Acronyms will remain the same
+// Years that have electric & total for energy will also have the primary pieces
+// Response length won't exceed allowed amount, else years will truncate
 // The subsets that currently exist in each values map are those that will continue to be available, and will continue to mean the same pools of data
 // (else add other subsets, their IDs, and storage/display handling)
 // Electricity returns won't have duplicate values or items to subtract for some year & ID (else we'll have to do slightly more complex storage - map of id to val -
@@ -1443,7 +1447,7 @@ function enableUserInput() {
 
 // For updateSectorSlider(), updateElecEfficiency(), updateExcludeTransportationSet()
 // Calculates & store the current adjustedVals for the subSubsets & primary pieces of passed in sector based on the current
-// adjustedDemand and adjustedElectrification, and green/excluded pieces
+// baseVals, adjustedDemand, adjustedElectrification, and green/excluded pieces
 function calculateStoreAdjustedVals(currSector) {
     let currSubset = consumption.get(currSector);
 
@@ -1454,7 +1458,7 @@ function calculateStoreAdjustedVals(currSector) {
     // electrification % = electric/total energy
     // electric energy essentially has the efficiency factor included within itself
     // thus (scaledElectric + x*eff) / ((scaledPrimary - x) + (scaledElectric + x*eff)) = new electrification %, calculate for x to find amount to move
-    // x = (new%*(scaledPrimary + scaledElectric) - scaledElectric)/(eff - new%*eff + new%)
+    // x = (elec%*(scaledPrimary + scaledElectric) - scaledElectric)/(eff - elec%*eff + elec%)
 
     let toMove = ((currSubset["adjustedElectrification"] / 100) * (scaledPrimary + scaledElectric) - scaledElectric) / 
       (currSubset["adjustedElecEfficiency"] - (currSubset["adjustedElectrification"] / 100)*currSubset["adjustedElecEfficiency"] + (currSubset["adjustedElectrification"] / 100));
@@ -1525,7 +1529,6 @@ function calculateStoreAdjustedCO2(currSector) {
 // Composes an EIA energy, CO2, electricity, or electricity import data query string with optional query, stateId, start, and end dates, 
 // with current EIA API key and instructions to return annually & sort returned data by date in descending order
 // (primary pieces are skipped in case of null query - used for year initialization)
-// TODO: make this compose for elec subparts (vis 1 stuff) as well
 function composeQueryString(queryType, query, stateId, start, end) {
     let allQueryString = "";
   
@@ -2114,37 +2117,69 @@ function checkTotalParts() {
 
       if(greenSet.has(currPrimaryPiece.key) || exclude.has(currPrimaryPiece)) {
         if(currPrimaryPiece["adjustedVal"] - currPrimaryPiece["baseVal"] < -10) {
+          d3.select("#error-message").style("display", "contents");
           throw new Error("Unelectrifiable or green primary piece " + currPrimaryPiece.key + " mistakenly electrified");
         }
       }
     }
+    
     if(Math.abs(currPrimaryBaseSum - currPrimary["baseVal"]) > 10 ||
       Math.abs(currPrimaryAdjustedSum - currPrimary["adjustedVal"]) > 10) {
+      d3.select("#error-message").style("display", "contents");
       throw new Error("Primaries don't sum up in " + currSubset.key); 
     }
     if(Math.abs(currTotal["baseVal"] - currElectric["baseVal"] - currPrimary["baseVal"]) > 10 ||
-      Math.abs(currTotal["adjustedVal"] - currElectric["adjustedVal"] - currPrimary["adjustedVal"] > 10)) {
-      throw new Error("Electric and primary don't sum up to total in " + currSubset.key);
+      Math.abs(currTotal["adjustedVal"] - currElectric["adjustedVal"] - currPrimary["adjustedVal"]) > 10) {
+      d3.select("#error-message").style("display", "contents");
+      throw new Error("Electric and primary, base or adjusted, don't sum up to total in " + currSubset.key);
     }
     if(Math.abs(currSubset["adjustedElectrification"] - 100 * (currElectric["adjustedVal"] / currTotal["adjustedVal"]) > 1)) {
+      d3.select("#error-message").style("display", "contents");
       throw new Error("Electrification % is incorrect in " + currSubset.key);
     }
+    
+    // the below is a different process from the toMove stuff in calculateStoreAdjustedVals() so that we can make sure it actually works from a different angle
+    // but this means we also won't check toMove in the smaller pieces beyond checking unelectrifieds & sums above
+    // in original calculation, we first scale demand then move electrification; here we first move electrification then scale demand
 
-    // currprimary["adjustedVal"] - currprimary["baseVal"] = currprimary["baseVal"] * adjustedDemand - x
-    // currPrimary["baseVal"] * adjustedDemand - x = currElectric["baseVal"] * adjustedDemand + x*effFactor
-    // TODO adjusted demand???
+    // find change in electrification
+    let currBaseElectrification = 100 * (currElectric["baseVal"]/currTotal["baseVal"]);
+    let currElectrificationDiff = currSubset["adjustedElectrification"] - currBaseElectrification;
+    // add/remove said electrification change between electricity & primary, to make correct electrification proportion
+    let currProgressElectric = (currElectric["baseVal"] + (currElectrificationDiff) * (currElectric["baseVal"] / currBaseElectrification));
+    let currProgressPrimary = (currPrimary["baseVal"] - (currElectrificationDiff) * (currPrimary["baseVal"] / (100 - currBaseElectrification)));
+    // see how much percent of the base demand is filled by this new proportion, based on electric efficiency factor
+    // aka, electric likely counts for more demand filled per GWh than primary does, since percent demand is based on amount of users, not raw energy
+    // (thus the elec efficiency is tied in)
+    let currProgressDemand = 100 * (currProgressElectric / currSubset["adjustedElecEfficiency"] + currProgressPrimary) /
+      (currElectric["baseVal"] / currSubset["adjustedElecEfficiency"] + currPrimary["baseVal"]);
+    // now multiply the vals by however much more is left to multiply by to reach correct adjusted demand
+    // multiplier is the same because proportions stay the same, to get correct electrification
+    let currExpectedElectric = currProgressElectric * (currSubset["adjustedDemand"] / currProgressDemand);
+    let currExpectedPrimary = currProgressPrimary * (currSubset["adjustedDemand"] / currProgressDemand);
+
+    if(Math.abs(currExpectedElectric - currElectric["adjustedVal"]) > 10) {
+      d3.select("#error-message").style("display", "contents");
+      throw new Error("Adjusted electric based on baseVal/adjustedDemand/adjustedElectrification is incorrect in " + currSubset.key);
+    }
+    if(Math.abs(currExpectedPrimary - currPrimary["adjustedVal"]) > 10) {
+      d3.select("#error-message").style("display", "contents");
+      throw new Error("Adjusted primary based on baseVal/adjustedDemand/adjustedElectrification is incorrect in " + currSubset.key);
+    }
   }
 
   let currElectricBaseSum = 0;
   for(let currElectricityPiece of electricity.values()) {
     currElectricBaseSum += currElectricityPiece["baseVal"];
     if(Math.abs(elecBaseGeneration * currElectricityPiece["adjustedDemand"] / 100 - currElectricityPiece["adjustedVal"]) > 10) {
+      d3.select("#error-message").style("display", "contents");
       throw new Error("Incorrect calculation of adjusted electricity generation as percentage of total base in " + currElectricityPiece.key);
     }
   }
   currElectricBaseSum += elecImport["baseVal"];
   currElectricBaseSum += elecOther["baseVal"];
   if(Math.abs(elecBaseGeneration - currElectricBaseSum) > 10) {
+    d3.select("#error-message").style("display", "contents");
     throw new Error("Electric pieces' base values fail to sum to stored base sum");
   }
 
@@ -2152,12 +2187,13 @@ function checkTotalParts() {
     for(let currCO2Piece of currCO2Subset.co2Pieces.values()) {
       if(currCO2Subset.key === "electric") {
         if(Math.abs(currCO2Piece["adjustedVal"] - electricity.get(currCO2Piece.key)["adjustedVal"] * currCO2Piece["factor"]) > 0.01) {
-          console.log(currCO2Piece["adjustedVal"] + " " + electricity.get(currCO2Piece.key)["adjustedVal"] + " " + currCO2Piece["factor"]);
+          d3.select("#error-message").style("display", "contents");
           throw new Error("CO2 factor multiplied by electricity adjusted val does not equal CO2 adjusted val for " + currCO2Piece.key);
         }
       } else {
         if(Math.abs(currCO2Piece["adjustedVal"] - consumption.get(currCO2Subset.key).subSubsets.get("primary").primaryPieces.get(currCO2Piece.key)["adjustedVal"] 
           * currCO2Piece["factor"]) > 0.01) {
+          d3.select("#error-message").style("display", "contents");
           throw new Error("CO2 factor multiplied by " + currCO2Subset.key + " adjusted val does not equal CO2 adjusted val for " + currCO2Piece.key);
         }
       }
