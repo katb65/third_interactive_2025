@@ -483,9 +483,6 @@ function updateExcludeTransportationSet(event) {
     transportationCO2Pieces.get("petroleum")["baseVal"] = transportationCO2Pieces.get("petroleum")["factor"] * currPrimaryPieces.get("petroleum")["baseVal"];
     // adjusted CO2 will get recalculated below
 
-    // TODO CO2 map adjustments in pull store CO2 and query formation (skip over the parts that have these exclude vals but still store them)
-    //  + CO2 recalculation adjustments
-    // + deal with legend
   } else { // consolidate back into petroleum
     currPrimaryPieces.delete(currPiece);
     for(let currID of exclude.get(currPiece)["idToVal"].keys()) {
@@ -536,9 +533,6 @@ function updateSectorSlider(event) {
         .find((element) => /sector-/.test(element)).slice(7); // locate the class pertaining to the sector name & isolate it
     let currType = currSliderBox.attr("class").split(" ")
         .find((element) => /type-/.test(element)).slice(5); // same for demand vs electrification
-
-    console.log(currSector);
-    console.log(currType);
 
     // Store data + adjust electrification if needed (currValue may be inaccurate after preventGreenElectrification)
     let currSubset = consumption.get(currSector);
@@ -735,19 +729,6 @@ async function initialize() {
     await initializeYears();
 
     await pullStoreData();
-
-    console.log("588 -------");
-    for(let currSubset of consumption.values()) {
-      console.log(currSubset.key);
-      console.log("electric ") + currSubset.subSubsets.get("electric")["adjustedVal"];
-      console.log("primary ") + currSubset.subSubsets.get("primary")["adjustedVal"];
-      for(let currPiece of currSubset.subSubsets.get("primary").primaryPieces.values()) {
-        console.log(" " + currPiece.key + " " + currPiece["adjustedVal"]);
-        for(let currID of currPiece.idToVal.keys()) {
-          console.log("  " + currID + " " + currPiece.idToVal["add"] + " "  + currPiece.idToVal["baseVal"]);
-        }
-      }
-    }
 
     checkTotalParts();
 
@@ -1002,8 +983,6 @@ function visualizeEnergyData(currSector = null) {
       .domain(currStacks)
       .range([currLeftMargin, currWidth - currMargin]) 
       .padding(0.1);
-
-    console.log(stackedData);
   
     // Bars
     currSectorBox.select(".vis")
@@ -1107,10 +1086,6 @@ function visualizeEnergyData(currSector = null) {
 
 // Visualize & print relevant text for the electricity generation & import data contained at the bottom
 function visualizeElectricityData() {
-  // TODO don't visualize import ( I already don't ) but then...
-  // TODO visualize as treemap (colors? same as other? brown vs green? cross-mapping upon switch? ...)
-  // pastel1 vs dark2?
-  // also align the groups that elec gen vs primaries are defined by (see: issue with other/biomass/petroleum) after this works
 
   let electricityBox = d3.select(".electricity");
 
@@ -1232,7 +1207,6 @@ function visualizeElectricityData() {
 
       tooltip.select(".line-1")
         .text((d) => {
-          console.log(currRectData);
           return (formatCommas(currRectData.val/GWhorGWDivisor) + " " + GWhorGW);
         });
 
@@ -1327,8 +1301,6 @@ function visualizeCO2Data() {
 
       let currRectData = d.data;
 
-      console.log("899 " + d.key + " " + d.rect);
-
       let tooltip = d3.select(".tooltip");
 
       tooltip.style("visibility", "visible")
@@ -1336,8 +1308,6 @@ function visualizeCO2Data() {
       tooltip.select(".subtitles")
         .text((d) => {return currRectData.sector.split(" ").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ") + 
           " " + currRectData.key.split(" ").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ")});
-
-      console.log("908 " + d.key + " " + d.rect);
 
       tooltip.select(".line-1")
         .text((d) => {
@@ -1348,7 +1318,6 @@ function visualizeCO2Data() {
         .text((d) => {
           let currCO2Sum = 0;
           for(let currCO2Piece of co2.map.get(currRectData.sector).co2Pieces.values()) {
-            console.log("1206 " + currCO2Piece);
             currCO2Sum += currCO2Piece["adjustedVal"];
           }
 
@@ -1465,7 +1434,6 @@ function calculateStoreAdjustedVals(currSector) {
 
     currSubset.subSubsets.get("primary")["adjustedVal"] = scaledPrimary - toMove;
     currSubset.subSubsets.get("electric")["adjustedVal"] = scaledElectric + (toMove * currSubset["adjustedElecEfficiency"]);
-    console.log("electric of transportation at 1132 " + currSubset.subSubsets.get("electric")["adjustedVal"]);
     currSubset.subSubsets.get("total")["adjustedVal"] = currSubset.subSubsets.get("primary")["adjustedVal"] + currSubset.subSubsets.get("electric")["adjustedVal"];
 
     let unelectrifiableSumBase = 0;
@@ -1491,17 +1459,6 @@ function calculateStoreAdjustedVals(currSector) {
         currPrimaryPiece["adjustedVal"] = 0;
       }
     }
-
-    console.log(currSubset.key + "----------");
-    console.log("adjustedDemand " + currSubset["adjustedDemand"]);
-    console.log("adjustedElectrification " + currSubset["adjustedElectrification"]);
-    console.log("primary " + currSubset.subSubsets.get("primary")["adjustedVal"]);
-    console.log("electric " + currSubset.subSubsets.get("electric")["adjustedVal"]);
-    console.log("total " + currSubset.subSubsets.get("total")["adjustedVal"]);
-    console.log("");
-    for(let currPrimaryPiece of currSubset.subSubsets.get("primary").primaryPieces.values()) {
-      console.log(currPrimaryPiece.key + " " + currPrimaryPiece["adjustedVal"]);
-    }
 }
 
 // For updateSectorSlider(), updateElecEfficiency(), updateElectricity(), updateExcludeTransportationSet(), updateEqualizeDemand()
@@ -1511,7 +1468,6 @@ function calculateStoreAdjustedCO2(currSector) {
   let currSubset = co2.map.get(currSector);
 
   for(let currCO2Piece of currSubset.co2Pieces.values()) {
-    console.log("1183 " + currCO2Piece);
     if(currSector === "electric") {
       currCO2Piece["adjustedVal"] = currCO2Piece["factor"] * electricity.get(currCO2Piece["key"])["adjustedVal"];
     } else {
@@ -1611,8 +1567,6 @@ function composeQueryString(queryType, query, stateId, start, end) {
     } else {
       throw new Error("Unexpected value in queryType: " + queryType);
     }
-
-    console.log(allQueryString);
   
     return allQueryString;
 }
@@ -1620,8 +1574,8 @@ function composeQueryString(queryType, query, stateId, start, end) {
 // For pullStoreData()
 // Dissects & stores EIA API response data for in the sector energy values map for the current-set year & state
 // If no data for some value, assumes it 0
-function storeEnergyData(allFullsEnergy) {  
-    console.log(allFullsEnergy);
+function storeEnergyData(allFullsEnergy) {
+
     // Set all vals as 0 to avoid leftover prior values in case of data gaps + adjustedElecEfficiency back to its base val
     for(let currSubset of consumption.values()) {
         currSubset["adjustedDemand"] = 0;
@@ -1680,11 +1634,6 @@ function storeEnergyData(allFullsEnergy) {
             for(let currPrimaryPiece of currSubSubset.primaryPieces.values()) {
               for(let currID of currPrimaryPiece.idToVal.keys()) {
                 if(currID === currFullEnergy["seriesId"]) {
-                  if(currSubset.key === "transportation" && currPrimaryPiece.key === "petroleum") {
-                    console.log("1679 petroleum with ID " + currID);
-                  } else if(currSubset.key === "transportation" && exclude.has(currPrimaryPiece.key)) {
-                    console.log("1683 exclude has " + currPrimaryPiece.key);
-                  }
                   currPrimaryPiece.idToVal.get(currID)["baseVal"] = postConvert;
                 }
               }
@@ -1711,9 +1660,6 @@ function storeEnergyData(allFullsEnergy) {
       for(let currPrimaryPiece of currPrimary.primaryPieces.values()) {
         // baseVal was set to 0 at start of function
         for(let currVal of currPrimaryPiece.idToVal.values()) {
-          if(currSubset.key === "transportation" && (currPrimaryPiece.key === "petroleum" || exclude.has(currPrimaryPiece.key))) {
-            console.log(currPrimaryPiece.key + " " + currVal["add"] + " " + currVal["baseVal"]);
-          }
           if(currVal["add"]) { 
             currPrimaryPiece["baseVal"] += currVal["baseVal"];
           } else {
@@ -1726,7 +1672,6 @@ function storeEnergyData(allFullsEnergy) {
         }
 
         currPrimaryPiece["adjustedVal"] = currPrimaryPiece["baseVal"];
-        console.log(currPrimaryPiece["key"] + " " + currPrimaryPiece["baseVal"] + " " + currPrimaryPiece["adjustedVal"]);
       }
 
       // after all the other-subtraction is over
@@ -1757,7 +1702,6 @@ function storeEnergyData(allFullsEnergy) {
 // If no data for some value, assumes it 0
 // Some of these end up negative, but it's because in the pulled data itself, they are negative
 function storeElectricityData(allFullsElecGen, allFullsImport) {  
-  console.log(allFullsElecGen);
 
   // Set all vals as 0 to avoid leftover prior values in case of data gaps
   for(let currElectricityPiece of electricity.values()) {
@@ -1772,10 +1716,8 @@ function storeElectricityData(allFullsElecGen, allFullsImport) {
   elecBaseGeneration = 0;
   transmissionEfficiency = 0;
   
-  console.log(allFullsElecGen);
   // Isolate pulled pieces + store
   for(let currFullElecGen of allFullsElecGen.response.data) {
-    console.log(currFullElecGen);
     if(parseInt(currFullElecGen["period"]) !== year) {
       continue; // we fetched several years near current year due to variable API mechanics, so cycle past irrelevant ones
     }
@@ -1840,7 +1782,7 @@ function storeElectricityData(allFullsElecGen, allFullsImport) {
     elecBaseConsumption += currSubset.subSubsets.get("electric")["baseVal"];
   }
   
-  transmissionEfficiency = elecBaseConsumption / elecBaseGeneration; // TODO in hawaii this is 1.04... catch the issue... set to 1? maybe off grid
+  transmissionEfficiency = elecBaseConsumption / elecBaseGeneration; 
   // generation but is recorded as consumption. maybe some pricing approximation. okay since it'll be in advanced just leave it as 1.04 but give a disclaimer
 
   // Set adjusted vals to start at base & percents of total base demand to be accurate
@@ -1852,12 +1794,6 @@ function storeElectricityData(allFullsElecGen, allFullsImport) {
   elecOther["adjustedDemand"] = 100 * elecOther["baseVal"]/elecBaseGeneration;
   elecImport["adjustedVal"] = elecImport["baseVal"];
   elecImport["adjustedDemand"] = 100 * elecImport["baseVal"]/elecBaseGeneration;
-
-  console.log("elec gen pieces");
-  for(let currElectricityPiece of electricity.values()) {
-    console.log(currElectricityPiece["key"] + " " + currElectricityPiece["baseVal"]);
-  }
-  console.log("import " + elecImport["adjustedVal"]);
 }
 
 // For pullStoreData()
@@ -1881,7 +1817,6 @@ function storeCO2Data(allFullsCO2) {
     }
 
     if(currFullCO2["value-units"] !== "million metric tons of CO2" || currFullCO2["stateId"] !== state) { // year & sector ID already checked
-      console.log(currFullCO2["stateId"]);
       throw new Error("Unexpected unit or state ID mismatch in pulled API data with " + currFullCO2 + " units " + currFullCO2["value-units"]);
     }
 
@@ -1988,7 +1923,7 @@ function printLegendPiece(green) {
   let size = 15;
 
   if(green) {
-    for(currColorPiece of colorMap.keys()) { // TODO once the pieces existing are malleable (aviation/marine), this will have to be compiled differently
+    for(currColorPiece of colorMap.keys()) {
       if(currColorPiece === "electric" || greenSet.has(currColorPiece)) {
         currArr.push({"key": currColorPiece});
       }
@@ -2008,8 +1943,6 @@ function printLegendPiece(green) {
     }
     currDiv = d3.select(".legend > .vis-container.ngreen");
   }
-  console.log(currArr);
-  console.log(currDiv);
 
   currDiv.selectAll("svg")
     .data(currArr)
@@ -2017,7 +1950,6 @@ function printLegendPiece(green) {
     .attr("height", (d) => { return size*8 + Array.from(consumption.keys()).length; })
     .each(function(d,i) { // passes each existing svg's data down into itself to create squares & text
       let currColorPiece = d.key;
-      console.log(currColorPiece);
 
       // title (ex. wind)
       d3.select(this).selectAll(".type")
@@ -2122,7 +2054,7 @@ function checkTotalParts() {
         }
       }
     }
-    
+
     if(Math.abs(currPrimaryBaseSum - currPrimary["baseVal"]) > 10 ||
       Math.abs(currPrimaryAdjustedSum - currPrimary["adjustedVal"]) > 10) {
       d3.select("#error-message").style("display", "contents");
