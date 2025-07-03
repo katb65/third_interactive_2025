@@ -323,10 +323,12 @@ colorMap.set("hydroelectric", {"green": "#dcf6f7", "ngreen": "#1b3030"});
 colorMap.set("nuclear", {"green": "#e9f7dc", "ngreen": "#374d22"});
 
 colorMap.set("coal", {"green": null, "ngreen": "#595c1c"});
-colorMap.set("natural gas", {"green": null, "ngreen": "#473409"});
-colorMap.set("petroleum", {"green": null, "ngreen": "#381b0c"});
+colorMap.set("natural gas", {"green": null, "ngreen": "#634a10"});
+colorMap.set("petroleum", {"green": null, "ngreen": "#522209"});
 
-colorMap.set("other", {"green": null, "ngreen": "#26100d"});
+colorMap.set("other", {"green": null, "ngreen": "#36120d"});
+
+colorMap.set("import", {"green": null, "ngreen": "#2c0d36"});
 
 colorMap.set("marine", {"green": null, "ngreen": "#000000"});
 colorMap.set("aviation", {"green": null, "ngreen": "#000000"});
@@ -1136,7 +1138,7 @@ function visualizeElectricityData() {
   }
   electricityBox.select(".generation-output").text("Electricity Generation & Import: " + formatCommas(currElecGeneration/GWhorGWDivisor) + " " + GWhorGW);
 
-  // Visualize (without other or import)
+  // Visualize
   // Set up JSON object of values to visualize
   var currJson = {
     name: "Electricity Generation In " + state + " By Pieces",
@@ -1152,6 +1154,9 @@ function visualizeElectricityData() {
     ]
   }
 
+  // TODO run through & make sure this import/other addition causes no issues + align the right aligned text within electricity to be on the same line
+  // as its slider
+
   for(let currElectricityPiece of electricity.values()) {
     // Don't add the 0-gen pieces to the vis, they only make it rearrange when not necessary
     // Also don't add the negatives (there aren't any big ones & negatives can't be visualized here)
@@ -1164,6 +1169,13 @@ function visualizeElectricityData() {
     } else {
       currJson.children[1].children.push({"key": currElectricityPiece["key"], "val": currElectricityPiece["adjustedVal"]});
     }
+  }
+
+  if(elecOther["adjustedVal"] > 0) {
+    currJson.children[1].children.push({"key": "other", "val": elecOther["adjustedVal"]});
+  }
+  if(elecImport["adjustedVal"] > 0) {
+    currJson.children[1].children.push({"key": "import", "val": elecImport["adjustedVal"]});
   }
 
   var currHierarchy = d3.hierarchy(currJson) // adds depth, height, parent to the data
@@ -1216,6 +1228,8 @@ function visualizeElectricityData() {
           for(let currElecPiece of electricity.values()) {
             currElectricitySum += currElecPiece["adjustedVal"];
           }
+          currElectricitySum += elecOther["adjustedVal"];
+          currElectricitySum += elecImport["adjustedVal"];
 
           return (formatCommas((currRectData.val / currElectricitySum) * 100) + "%");
         });
@@ -1979,10 +1993,14 @@ function printLegendPiece(green) {
 
       // sectors & their values for this piece
       // if excluded piece, use only the transportation sector
+      // if import piece, use only the electric sector
+      // if electric piece, use no sectors
       let sectors = [];
       if(exclude.has(currColorPiece)) {
         sectors.push("transportation");
-      } else {
+      } else if(currColorPiece === "import") {
+        sectors.push("electric");
+      } else if(currColorPiece !== "electric") {
         for(let currKey of consumption.keys()) {
           sectors.push(currKey);
         }
@@ -1997,32 +2015,33 @@ function printLegendPiece(green) {
         .attr("y", (d, i) => { return (i+1)*(size + 2) + size*2})
         .text((d) => {
           let currPrint = "";
-          if(currColorPiece !== "electric") {
-            currPrint += d.split(" ").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ") + ": ";
-            if(d === "electric") {
-              if(currColorPiece === "other") {
-                currPrint += formatCommas(elecOther["adjustedVal"]/GWhorGWDivisor) + " " + GWhorGW;
-              } else {
-                currPrint += formatCommas(electricity.get(currColorPiece)["adjustedVal"]/GWhorGWDivisor) + " " + GWhorGW;
-              }
-            } else if(currColorPiece === "nuclear") {
-              currPrint += "0 primary " + GWhorGW;
+          
+          currPrint += d.split(" ").map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" ") + ": ";
+          if(d === "electric") {
+            if(currColorPiece === "other") {
+              currPrint += formatCommas(elecOther["adjustedVal"]/GWhorGWDivisor) + " " + GWhorGW;
+            } else if(currColorPiece === "import") {
+              currPrint += formatCommas(elecImport["adjustedVal"]/GWhorGWDivisor) + " " + GWhorGW;
             } else {
-              currPrint += formatCommas((consumption.get(d).subSubsets.get("primary").primaryPieces.get(currColorPiece)["adjustedVal"])
-                /GWhorGWDivisor) + " primary " + GWhorGW;
+              currPrint += formatCommas(electricity.get(currColorPiece)["adjustedVal"]/GWhorGWDivisor) + " " + GWhorGW;
             }
-            if(Array.from(co2.ids.values()).includes(currColorPiece) || exclude.has(currColorPiece)) {
-              let currCO2Sum = 0;
-              if(!exclude.has(currColorPiece)) {
-                for(let currCO2Subset of co2.map.values()) {
-                  currCO2Sum += currCO2Subset.co2Pieces.get(currColorPiece)["adjustedVal"];
-                }
-              } else {
-                currCO2Sum = co2.map.get("transportation").co2Pieces.get(currColorPiece)["adjustedVal"];
+          } else if(currColorPiece === "nuclear") {
+            currPrint += "0 primary " + GWhorGW;
+          } else {
+            currPrint += formatCommas((consumption.get(d).subSubsets.get("primary").primaryPieces.get(currColorPiece)["adjustedVal"])
+              /GWhorGWDivisor) + " primary " + GWhorGW;
+          }
+          if(Array.from(co2.ids.values()).includes(currColorPiece) || exclude.has(currColorPiece)) {
+            let currCO2Sum = 0;
+            if(!exclude.has(currColorPiece)) {
+              for(let currCO2Subset of co2.map.values()) {
+                currCO2Sum += currCO2Subset.co2Pieces.get(currColorPiece)["adjustedVal"];
               }
-
-              currPrint += ", " + formatCommas(co2.map.get(d).co2Pieces.get(currColorPiece)["adjustedVal"]) + " million metric tons CO2";
+            } else {
+              currCO2Sum = co2.map.get("transportation").co2Pieces.get(currColorPiece)["adjustedVal"];
             }
+
+            currPrint += ", " + formatCommas(co2.map.get(d).co2Pieces.get(currColorPiece)["adjustedVal"]) + " million metric tons CO2";
           }
           
           return currPrint;
@@ -2048,9 +2067,9 @@ function checkTotalParts() {
       currPrimaryAdjustedSum += currPrimaryPiece["adjustedVal"];
 
       if(greenSet.has(currPrimaryPiece.key) || exclude.has(currPrimaryPiece)) {
-        if(currPrimaryPiece["adjustedVal"] - currPrimaryPiece["baseVal"] < -10) {
+        if(currSubset["adjustedDemand"] >= 100 && currPrimaryPiece["adjustedVal"] - currPrimaryPiece["baseVal"] < -10) {
           d3.select("#error-message").style("display", "contents");
-          throw new Error("Unelectrifiable or green primary piece " + currPrimaryPiece.key + " mistakenly electrified");
+          throw new Error("Unelectrifiable or green primary piece " + currPrimaryPiece.key + " mistakenly electrified in " + currSubset.key);
         }
       }
     }
