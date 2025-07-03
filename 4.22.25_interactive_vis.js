@@ -314,19 +314,19 @@ let GWhorGWDivisor = 1; // when above is GW, this is set to 365*24
 // what abt shades of light green vs shades of brown?
 let colorMap = new Map();
 
-colorMap.set("electric", {"green": d3.schemePastel2[0], "ngreen": null});
+colorMap.set("electric", {"green": "#f7dcf1", "ngreen": null});
 
-colorMap.set("wind", {"green": d3.schemePastel2[1], "ngreen": null});
-colorMap.set("solar", {"green": d3.schemePastel2[2], "ngreen": null});
-colorMap.set("geothermal", {"green": d3.schemePastel2[3], "ngreen": null});
-colorMap.set("hydroelectric", {"green": d3.schemePastel2[4], "ngreen": d3.schemeCategory10[0]});
-colorMap.set("nuclear", {"green": d3.schemePastel2[5], "ngreen": d3.schemeCategory10[1]});
+colorMap.set("wind", {"green": "#ebdcf7", "ngreen": null});
+colorMap.set("solar", {"green": "#dcdff7", "ngreen": null});
+colorMap.set("geothermal", {"green": "#dcebf7", "ngreen": null});
+colorMap.set("hydroelectric", {"green": "#dcf6f7", "ngreen": "#1b3030"});
+colorMap.set("nuclear", {"green": "#e9f7dc", "ngreen": "#374d22"});
 
-colorMap.set("coal", {"green": null, "ngreen": d3.schemeCategory10[2]});
-colorMap.set("natural gas", {"green": null, "ngreen": d3.schemeCategory10[3]});
-colorMap.set("petroleum", {"green": null, "ngreen": d3.schemeCategory10[4]});
+colorMap.set("coal", {"green": null, "ngreen": "#595c1c"});
+colorMap.set("natural gas", {"green": null, "ngreen": "#473409"});
+colorMap.set("petroleum", {"green": null, "ngreen": "#381b0c"});
 
-colorMap.set("other", {"green": null, "ngreen": d3.schemeCategory10[5]});
+colorMap.set("other", {"green": null, "ngreen": "#26100d"});
 
 colorMap.set("marine", {"green": null, "ngreen": "#000000"});
 colorMap.set("aviation", {"green": null, "ngreen": "#000000"});

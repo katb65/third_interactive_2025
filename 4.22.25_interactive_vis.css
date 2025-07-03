@@ -1,3 +1,7 @@
+body {
+    background-color: #d1c8b2;
+}
+
 .titles {
     font-family: tahoma, sans-serif;
     font-size: 18px;
@@ -43,6 +47,7 @@ fieldset {
     padding: 20px;
     border-width: 1px;
     border-color: black;
+    background-color: #e6dfcf;
 }
 
 .energy {
@@ -61,8 +66,23 @@ fieldset {
 }
 
 .cell {
-    background-color: lightblue;
     padding: 10px;
+}
+
+.cell.sector-industrial {
+    background-color: #787777;
+}
+
+.cell.sector-transportation {
+    background-color: #88adc2;
+}
+
+.cell.sector-commercial {
+    background-color: #bd9355;
+}
+
+.cell.sector-residential {
+    background-color: #e3b44f;
 }
 
 .input-container * {
