@@ -2,7 +2,6 @@
 <!-- Basic security -->
 <meta http-equiv="Content-Security-Policy" content="script-src 'self' https://d3js.org; style-src 'self'"> 
 
-<!-- TODO add disabled to every input to start -->
 <head>
     <!-- Load d3.js -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
@@ -50,7 +49,6 @@
                 </div>
                 <div id = "exclude-transportation-select">
                     <text class = "subtitles"> Exclude From Transportation's Electrification? </text>
-                    <!-- TODO should residual also be excluded from the other sectors where it's used, or only transportation (ships) -->
                     <ul>
                         <li>
                             <input type = "checkbox" class = "aviation" id = "exclude-aviation-checkbox" value = "aviation" disabled></input>
@@ -103,7 +101,6 @@
                         Refer to <a href = https://www.nrel.gov/gis/solar-supply-curves.html class = "regular-text green-text"> NREL data </a> for real solar & 
                         wind capacities per state.
                     </li>
-                    <!-- TODO mention wind & solar capacity -->
                 </ul>
                 <br/>
                 <a href = https://d3js.org class = "mini-text green-text"> D3 </a><br/>
@@ -143,8 +140,6 @@
                         <text class = "regular-text slider-output"> </text>
                     </div>
                     <div class="input-container type-demand">
-                        <!-- TODO add text input box for precision? will need to filter out non numeric input + trigger slider event -->
-                        <!-- TODO blurbs saying demand % inc's efffactor (by amt of things using it) whereas electrification % doesn't (by GWh)-->
                         <text class = "regular-text"> Demand: </text><br/>
                         <text class = "regular-text"> 0% </text>
                         <input  class = "slider" type="range" min = "0" max = "500" value = "100" step = "1" disabled></input>

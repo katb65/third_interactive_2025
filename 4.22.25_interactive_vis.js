@@ -16,6 +16,7 @@
 // Only nuclear & hydroelectric energies are controversial as being green or not green (else add more checkboxes & handling)
 // The values are pulled accurately (this is difficult to check, as for most, a check by an automatic method would involve merely pulling them again in the same
 // way, defeating the purpose; this can be checked manually through the linked EIA browsers)
+// Petroleum fully includes the aviation/marine pieces (for advanced), and they do not overlap
 
 // ---These should be changed to someone else's EIA API key & directory root (for local files) once I'm not involved with the project: ---
 // (key obtainable on EIA site):
@@ -65,7 +66,7 @@ class PrimaryPiece {
 // primary = total primary energy this sector consumes (not from elecSector)
 // total = this sector's total consumption (for the set year, not inc. "electrical system energy losses") = electric + primary
 // primary energy SubSubsets are further divided using inner map
-// null or 0 for any value means not present in EIA data (assumed 0)
+// null or 0 for any value means is 0 or is not present in EIA data (assumed 0)
 class SubSubset {
     key; // ex. "elecSector"
     idEnergy; // ex. "ESCCB" for a commercial sector subset, electric sub subset
@@ -142,7 +143,7 @@ class EnergySubset {
 }
 
 // To store pieces of our electricity generation or import data in separate objects
-// null for any generation means not present in EIA data (assumed 0)
+// null or 0 for any generation means is 0 or is not present in EIA data (assumed 0)
 class ElectricityPiece {
   key; // ex. "wind"
   ids; // array of IDs to sum up vals of for this piece
@@ -166,6 +167,7 @@ class ElectricityPiece {
 // To store pieces of the CO2 data in separate objects, holds one of the pieces a CO2Subset is divided into
 // Its corresponding ID will be found outside in the object that holds the overall CO2 map, as CO2Piece ids are the same for ones with the same keys
 // regardless of parent, and must be used alongside the parent ID to acquire the correct piece
+// null or 0 for any generation means is 0 or is not present in EIA data (assumed 0)
 class CO2Piece {
   key; // ex. "coal"
 
@@ -307,11 +309,6 @@ let GWhorGWDivisor = 1; // when above is GW, this is set to 365*24
 
 // Color map
 // Each piece will correspond to the same hue of color across sectors, but will be lighter shade if declared green by user than if not
-// Using 
-// TODO: add colorscales for pieces that some primary pieces will be subsplittable into (aviation?)
-// TODO: may be able to make curr color scheme something like reds/oranges, then others light shades of green (colorblindness... maybe smt else);
-// and any unelectrifiables can be shades of dark
-// what abt shades of light green vs shades of brown?
 let colorMap = new Map();
 
 colorMap.set("electric", {"green": "#f7dcf1", "ngreen": null});
@@ -1153,11 +1150,6 @@ function visualizeElectricityData() {
       }
     ]
   }
-
-  // TODO run through & make sure this import/other addition causes no issues + align the right aligned text within electricity to be on the same line
-  // as its slider
-  // ok that was fixed by setting margin: 0 to override browser's defaults but the elec eff value is still all the way at the top right for no rzn...
-  // maybe it's smt to do with style display contents overriding prev style? check this + if so, fix this in the other display contents cases as well
 
   for(let currElectricityPiece of electricity.values()) {
     // Don't add the 0-gen pieces to the vis, they only make it rearrange when not necessary
