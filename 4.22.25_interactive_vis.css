@@ -114,7 +114,9 @@ fieldset {
 
 .electricity .input-container .slider-output {
     position: absolute;
+    margin: 0;
     right: 0;
+    top: 0;
 }
 
 .electricity .vis-container {
@@ -128,11 +130,6 @@ fieldset {
 .electricity .vis {
     width: 500px;
     height: 250px;
-}
-
-.electricity .slider-output {
-    text-align: right;
-    /* TODO make this work lol */
 }
 
 .co2 {

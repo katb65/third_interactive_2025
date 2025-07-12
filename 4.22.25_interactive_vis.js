@@ -514,8 +514,8 @@ function updateExcludeTransportationSet(event) {
 function updateShowEfficiencies(event) {
   // Show or don't show the slider: values are already loaded in
   if(d3.select(event.target).property("checked")) {
-    d3.selectAll(".type-elec-efficiency").style("display", "contents");
-    d3.selectAll(".type-transmission-efficiency").style("display", "contents");
+    d3.selectAll(".type-elec-efficiency").style("display", "block");
+    d3.selectAll(".type-transmission-efficiency").style("display", "block");
   } else {
     d3.selectAll(".type-elec-efficiency").style("display", "none");
     d3.selectAll(".type-transmission-efficiency").style("display", "none");
@@ -1156,6 +1156,8 @@ function visualizeElectricityData() {
 
   // TODO run through & make sure this import/other addition causes no issues + align the right aligned text within electricity to be on the same line
   // as its slider
+  // ok that was fixed by setting margin: 0 to override browser's defaults but the elec eff value is still all the way at the top right for no rzn...
+  // maybe it's smt to do with style display contents overriding prev style? check this + if so, fix this in the other display contents cases as well
 
   for(let currElectricityPiece of electricity.values()) {
     // Don't add the 0-gen pieces to the vis, they only make it rearrange when not necessary
