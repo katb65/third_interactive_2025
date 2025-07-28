@@ -1,4 +1,4 @@
-# interactive_electrification_2025
+# third_interactive_2025
 
 Interactive visualization using D3 (JavaScript) to allow variable electrification percentages and sources of electricity per state in the US, along with other micro-modifications, displaying resulting emissions.
 
